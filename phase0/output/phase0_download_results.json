@@ -1,0 +1,47 @@
+{
+  "osmnx_version": "2.1.1",
+  "bbox": {
+    "west": 77.56,
+    "south": 12.96,
+    "east": 77.62,
+    "north": 13.0
+  },
+  "download_and_build_seconds": 92.0,
+  "downloaded_data_mb_(cache_growth)": 3.55,
+  "save_seconds": 0.7,
+  "graph_file_mb": 6.47,
+  "nodes": 6828,
+  "edges_(directed)": 16972,
+  "memory_at_start_mb": 209.0,
+  "memory_after_build_mb": 315.0,
+  "peak_memory_mb": 326.0,
+  "connectivity_(nothing_was_removed)": {
+    "nodes_total": 6828,
+    "weak_components_count": 32,
+    "largest_weak_component_nodes": 6781,
+    "largest_weak_component_percent": 99.3,
+    "strong_components_count": 71,
+    "largest_strong_component_nodes": 6722,
+    "largest_strong_component_percent": 98.4,
+    "nodes_outside_largest_strong_component": 106,
+    "five_biggest_strong_component_sizes": [
+      6722,
+      8,
+      4,
+      4,
+      4
+    ],
+    "strong_components_with_one_node": 46
+  },
+  "road_length": {
+    "total_directed_edge_length_km_(two-way roads counted twice)": 944.6,
+    "estimated_unique_physical_road_km_(approximate)": 570.1,
+    "edges_total": 16972,
+    "edges_without_a_reverse_edge_(one-way-like)": 2346,
+    "one_way_like_percent": 13.8
+  },
+  "hospital_original_coordinate_to_nearest_road_node": {
+    "H01": "162 m to node 12121597668",
+    "H02": "8 m to node 294079863"
+  }
+}

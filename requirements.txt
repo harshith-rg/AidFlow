@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+pydantic
+pytest
+httpx
+osmnx>=2.0
+networkx
+scikit-learn
+matplotlib
+psutil
+numpy

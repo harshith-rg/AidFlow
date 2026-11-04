@@ -1,0 +1,59 @@
+{
+  "load_seconds": 0.6,
+  "memory_before_load_mb": 209.0,
+  "memory_after_load_mb": 309.0,
+  "memory_used_by_graph_mb": 100.0,
+  "peak_memory_mb": 349.0,
+  "nodes": 6828,
+  "edges_(directed)": 16972,
+  "connectivity_(nothing_was_removed)": {
+    "nodes_total": 6828,
+    "weak_components_count": 32,
+    "largest_weak_component_nodes": 6781,
+    "largest_weak_component_percent": 99.3,
+    "strong_components_count": 71,
+    "largest_strong_component_nodes": 6722,
+    "largest_strong_component_percent": 98.4,
+    "nodes_outside_largest_strong_component": 106,
+    "five_biggest_strong_component_sizes": [
+      6722,
+      8,
+      4,
+      4,
+      4
+    ],
+    "strong_components_with_one_node": 46
+  },
+  "hospital_snapping": {
+    "H01": {
+      "original_coordinate_to_nearest_road_node_m": 162,
+      "snapped_node": 12121597668,
+      "node_in_largest_strong_component": true,
+      "note": ""
+    },
+    "H02": {
+      "original_coordinate_to_nearest_road_node_m": 8,
+      "snapped_node": 294079863,
+      "node_in_largest_strong_component": true,
+      "note": ""
+    }
+  },
+  "sample_routes": [
+    {
+      "direction": "H01 -> H02",
+      "road_distance_km": 5.01,
+      "straight_line_between_snapped_nodes_km": 3.95,
+      "road_to_straight_ratio": 1.27,
+      "illustrative_eta_min_(30_kmh_no_traffic)": 10.0,
+      "nodes_on_route": 46
+    },
+    {
+      "direction": "H02 -> H01",
+      "road_distance_km": 4.53,
+      "straight_line_between_snapped_nodes_km": 3.95,
+      "road_to_straight_ratio": 1.15,
+      "illustrative_eta_min_(30_kmh_no_traffic)": 9.1,
+      "nodes_on_route": 60
+    }
+  ]
+}
