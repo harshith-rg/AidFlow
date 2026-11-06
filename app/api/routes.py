@@ -8,14 +8,16 @@ POST /recommend-hospital is added in Phase 5.
 import time
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
+from app.api.errors import AidFlowError
 from app.data.hospital_repository import load_repository
-from app.models.schemas import HealthResponse
+from app.models.schemas import ErrorCode, HealthResponse
+from app.services.geo import CoordinateError, validate_lat_lng
 from app.services.graph_loader import GraphError, get_road_graph
-from app.services.routing import find_route
+from app.services.routing import PathNotFoundError, find_route
 from app.services.snapping import OutOfCoverageError, snap_hospital, snap_to_road
 
 router = APIRouter()
@@ -70,22 +72,81 @@ def demo_hospitals() -> dict[str, Any]:
 
 @router.post("/api/demo/route", summary="Calculate route from patient to hospital")
 def demo_route(req: DemoRouteRequest) -> dict[str, Any]:
-    graph = get_road_graph()
+    try:
+        validate_lat_lng(req.origin_lat, req.origin_lng)
+    except CoordinateError as err:
+        raise AidFlowError(
+            ErrorCode.INVALID_COORDINATES,
+            str(err),
+            400,
+            {"origin_lat": req.origin_lat, "origin_lng": req.origin_lng},
+        ) from err
+
+    algo = req.algorithm.lower().strip()
+    if algo not in ("astar", "dijkstra"):
+        raise AidFlowError(
+            ErrorCode.INVALID_REQUEST,
+            f"Unknown routing algorithm '{req.algorithm}'. Supported algorithms: 'astar', 'dijkstra'.",
+            400,
+            {"algorithm": req.algorithm},
+        )
+
+    try:
+        graph = get_road_graph()
+    except GraphError as err:
+        raise AidFlowError(
+            ErrorCode.INTERNAL_ERROR,
+            f"Road graph is not available: {err}",
+            500,
+        ) from err
+
     repo = load_repository()
     hospital = repo.get(req.hospital_id)
     if not hospital:
-        raise HTTPException(status_code=404, detail="Hospital not found")
+        raise AidFlowError(
+            ErrorCode.INVALID_REQUEST,
+            f"Hospital '{req.hospital_id}' not found.",
+            400,
+            {"hospital_id": req.hospital_id},
+        )
 
     t0 = time.perf_counter()
     try:
         snap_origin = snap_to_road(graph, req.origin_lat, req.origin_lng)
     except OutOfCoverageError as err:
-        raise HTTPException(status_code=422, detail=str(err)) from err
+        raise AidFlowError(
+            ErrorCode.OUT_OF_COVERAGE,
+            str(err),
+            422,
+            {"origin_lat": req.origin_lat, "origin_lng": req.origin_lng},
+        ) from err
 
-    snap_hosp = snap_hospital(graph, hospital)
-    route = find_route(
-        graph, snap_origin.node_id, snap_hosp.node_id, algorithm=req.algorithm
-    )
+    try:
+        snap_hosp = snap_hospital(graph, hospital)
+    except OutOfCoverageError as err:
+        raise AidFlowError(
+            ErrorCode.OUT_OF_COVERAGE,
+            f"Hospital '{hospital.hospital_id}' location is outside road graph coverage: {err}",
+            422,
+            {"hospital_id": hospital.hospital_id},
+        ) from err
+
+    try:
+        route = find_route(
+            graph, snap_origin.node_id, snap_hosp.node_id, algorithm=algo
+        )
+    except PathNotFoundError as err:
+        raise AidFlowError(
+            ErrorCode.NO_ROUTE_FOUND,
+            f"No directed road route found from origin (node {snap_origin.node_id}) to hospital '{hospital.hospital_id}' (node {snap_hosp.node_id}).",
+            422,
+            {
+                "origin_node": snap_origin.node_id,
+                "hospital_node": snap_hosp.node_id,
+                "hospital_id": hospital.hospital_id,
+            },
+        ) from err
+
     time_ms = (time.perf_counter() - t0) * 1000
 
     return {
@@ -112,7 +173,7 @@ def demo_route(req: DemoRouteRequest) -> dict[str, Any]:
         "node_count": route.node_count,
         "edge_count": route.edge_count,
         "calculation_time_ms": round(time_ms, 2),
-        "algorithm": req.algorithm,
+        "algorithm": algo,
         "polyline": [list(pt) for pt in route.polyline],
     }
 
@@ -253,6 +314,8 @@ DEMO_HTML = """<!DOCTYPE html>
         ⚡ Calculate Shortest Road Route
       </button>
 
+      <div id="route-error" style="display:none; background:#7f1d1d; border:1px solid #ef4444; color:#fecaca; padding:12px; border-radius:8px; font-size:13px; line-height:1.4;"></div>
+
       <div id="stats-box" class="stats-card">
         <div class="stats-header">✓ Shortest Road Route Computed</div>
         <div class="stat-row">
@@ -385,6 +448,11 @@ DEMO_HTML = """<!DOCTYPE html>
       const hospitalId = document.getElementById('hospital-select').value;
       const algorithm = document.getElementById('algo-select').value;
       const btn = document.getElementById('route-btn');
+      const errorBox = document.getElementById('route-error');
+      if (errorBox) {
+        errorBox.style.display = 'none';
+        errorBox.innerText = '';
+      }
       btn.innerText = "⏳ Computing Road Path...";
       btn.disabled = true;
 
@@ -398,13 +466,18 @@ DEMO_HTML = """<!DOCTYPE html>
           algorithm: algorithm
         })
       })
-      .then(res => {
+      .then(async res => {
+        const body = await res.json();
         if (!res.ok) {
-          return res.json().then(err => { throw new Error(err.detail || "Routing failed"); });
+          const msg = (body && body.error && body.error.message)
+            ? `[${body.error.code}] ${body.error.message}`
+            : ((body && body.detail) ? body.detail : "Routing request failed");
+          throw new Error(msg);
         }
-        return res.json();
+        return body;
       })
       .then(data => {
+        if (errorBox) { errorBox.style.display = 'none'; }
         // Remove previous route
         if (routeLayer) { map.removeLayer(routeLayer); }
 
@@ -429,7 +502,13 @@ DEMO_HTML = """<!DOCTYPE html>
         document.getElementById('stat-points').innerText = `${data.polyline.length} coordinates`;
       })
       .catch(err => {
-        alert("Routing error: " + err.message);
+        if (errorBox) {
+          errorBox.innerText = "Routing error: " + err.message;
+          errorBox.style.display = 'block';
+        }
+        if (routeLayer) { map.removeLayer(routeLayer); routeLayer = null; }
+        const statsBox = document.getElementById('stats-box');
+        if (statsBox) { statsBox.style.display = 'none'; }
       })
       .finally(() => {
         btn.innerText = "⚡ Calculate Shortest Road Route";
