@@ -4,7 +4,9 @@ The downloaded graph is kept COMPLETE: no roads are thrown away to make
 it look connected. Connectivity is only measured and reported.
 """
 
+import argparse
 import json
+import shutil
 import sys
 import time
 
@@ -20,6 +22,7 @@ from phase0_utils import (
     current_memory_mb,
     file_size_mb,
     folder_size_mb,
+    get_configured_bbox,
     peak_memory_mb,
     print_report,
     road_length_stats,
@@ -29,6 +32,24 @@ from phase0_utils import (
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description="Download and measure road network graph.")
+    parser.add_argument("--west", type=float, default=None, help="West longitude")
+    parser.add_argument("--south", type=float, default=None, help="South latitude")
+    parser.add_argument("--east", type=float, default=None, help="East longitude")
+    parser.add_argument("--north", type=float, default=None, help="North latitude")
+    parser.add_argument("--output", type=str, default=None, help="Output GraphML path")
+    parser.add_argument(
+        "--install",
+        action="store_true",
+        help="Copy output graph to app/data/graph/bengaluru_small_full.graphml",
+    )
+    args = parser.parse_args()
+
+    active_bbox = get_configured_bbox(
+        west=args.west, south=args.south, east=args.east, north=args.north
+    )
+    target_graph_file = Path(args.output).resolve() if args.output else GRAPH_FILE
+
     # This code is written for OSMnx version 2 or newer.
     if int(ox.__version__.split(".")[0]) < 2:
         sys.exit("Please upgrade: pip install --upgrade 'osmnx>=2.0'")
@@ -55,8 +76,16 @@ def main() -> None:
     #   are disconnected. (OSMnx's default, False, would silently delete
     #   them, which is exactly what we do not want.)
     # bbox order for OSMnx 2 is (west, south, east, north).
-    print("\nDownloading roads... (this can take a minute or more)")
-    bbox = (BBOX["west"], BBOX["south"], BBOX["east"], BBOX["north"])
+    print(
+        f"\nDownloading roads for box west={active_bbox['west']}, south={active_bbox['south']}, "
+        f"east={active_bbox['east']}, north={active_bbox['north']}..."
+    )
+    bbox = (
+        active_bbox["west"],
+        active_bbox["south"],
+        active_bbox["east"],
+        active_bbox["north"],
+    )
     start = time.perf_counter()
     graph = ox.graph_from_bbox(bbox, network_type="drive", retain_all=True)
     build_seconds = time.perf_counter() - start
@@ -69,8 +98,21 @@ def main() -> None:
 
     # ---- Step 2: save the COMPLETE graph (nothing removed) -----------
     start = time.perf_counter()
-    ox.save_graphml(graph, GRAPH_FILE)
+    target_graph_file.parent.mkdir(parents=True, exist_ok=True)
+    ox.save_graphml(graph, target_graph_file)
     save_seconds = time.perf_counter() - start
+
+    if args.install:
+        install_target = (
+            Path(__file__).resolve().parents[1]
+            / "app"
+            / "data"
+            / "graph"
+            / "bengaluru_small_full.graphml"
+        )
+        install_target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(target_graph_file, install_target)
+        print(f"Installed graph to: {install_target}")
 
     # ---- Step 3: measure (these only READ the graph) -----------------
     connectivity = connectivity_stats(graph)
@@ -85,11 +127,11 @@ def main() -> None:
 
     results = {
         "osmnx_version": ox.__version__,
-        "bbox": BBOX,
+        "bbox": active_bbox,
         "download_and_build_seconds": round(build_seconds, 1),
         "downloaded_data_mb_(cache_growth)": round(cache_after - cache_before, 2),
         "save_seconds": round(save_seconds, 1),
-        "graph_file_mb": round(file_size_mb(GRAPH_FILE), 2),
+        "graph_file_mb": round(file_size_mb(target_graph_file), 2),
         "nodes": graph.number_of_nodes(),
         "edges_(directed)": graph.number_of_edges(),
         "memory_at_start_mb": round(memory_start, 0),
@@ -101,7 +143,7 @@ def main() -> None:
     }
 
     print_report("PHASE 0 DOWNLOAD REPORT", results)
-    print(f"Complete graph saved to: {GRAPH_FILE}")
+    print(f"Complete graph saved to: {target_graph_file}")
 
     if results["downloaded_data_mb_(cache_growth)"] == 0:
         print(

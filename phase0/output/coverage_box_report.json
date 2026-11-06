@@ -1,0 +1,210 @@
+{
+  "bbox": {
+    "west": 77.52,
+    "south": 12.9,
+    "east": 77.68,
+    "north": 13.04
+  },
+  "hospitals_inside_count": 23,
+  "hospitals_inside_ids": [
+    "H01",
+    "H02",
+    "H03",
+    "H04",
+    "H05",
+    "H06",
+    "H07",
+    "H08",
+    "H09",
+    "H10",
+    "H11",
+    "H12",
+    "H13",
+    "H14",
+    "H15",
+    "H17",
+    "H20",
+    "H24",
+    "H25",
+    "H27",
+    "H29",
+    "H32",
+    "H34"
+  ],
+  "raw_nodes": 72040,
+  "raw_edges": 187803,
+  "clean_nodes": 72040,
+  "clean_edges": 187464,
+  "file_size_mb": 68.52,
+  "download_seconds": 93.1,
+  "save_seconds": 18.2,
+  "load_seconds": 20.12,
+  "peak_memory_mb": 1577.4,
+  "largest_scc_nodes": 71483,
+  "largest_scc_percent": 99.2,
+  "hospitals_far_over_500m": [],
+  "hospitals_disconnected": [],
+  "snapping": {
+    "H01": {
+      "name": "Demo Majestic Central Hospital",
+      "locality": "Majestic / Chickpet",
+      "distance_m": 162.1,
+      "snapped_node": 12121597668,
+      "in_largest_scc": true
+    },
+    "H02": {
+      "name": "Demo Shivajinagar General Hospital",
+      "locality": "Shivajinagar",
+      "distance_m": 7.8,
+      "snapped_node": 294079863,
+      "in_largest_scc": true
+    },
+    "H03": {
+      "name": "Demo Indiranagar Medical Centre",
+      "locality": "Indiranagar",
+      "distance_m": 2.8,
+      "snapped_node": 11187974841,
+      "in_largest_scc": true
+    },
+    "H04": {
+      "name": "Demo Koramangala Multispeciality Hospital",
+      "locality": "Koramangala",
+      "distance_m": 1.3,
+      "snapped_node": 309592695,
+      "in_largest_scc": true
+    },
+    "H05": {
+      "name": "Demo HSR Layout Hospital",
+      "locality": "HSR Layout",
+      "distance_m": 53.6,
+      "snapped_node": 266268086,
+      "in_largest_scc": true
+    },
+    "H06": {
+      "name": "Demo BTM Layout Clinic and Hospital",
+      "locality": "BTM Layout",
+      "distance_m": 4.0,
+      "snapped_node": 10123822801,
+      "in_largest_scc": true
+    },
+    "H07": {
+      "name": "Demo Jayanagar Hospital A",
+      "locality": "Jayanagar",
+      "distance_m": 48.6,
+      "snapped_node": 309596309,
+      "in_largest_scc": true
+    },
+    "H08": {
+      "name": "Demo Jayanagar Hospital B",
+      "locality": "Jayanagar",
+      "distance_m": 48.6,
+      "snapped_node": 309596309,
+      "in_largest_scc": true
+    },
+    "H09": {
+      "name": "Demo JP Nagar Hospital",
+      "locality": "JP Nagar",
+      "distance_m": 6.8,
+      "snapped_node": 7100647721,
+      "in_largest_scc": true
+    },
+    "H10": {
+      "name": "Demo Banashankari Hospital",
+      "locality": "Banashankari",
+      "distance_m": 22.6,
+      "snapped_node": 7410528383,
+      "in_largest_scc": true
+    },
+    "H11": {
+      "name": "Demo Basavanagudi Hospital",
+      "locality": "Basavanagudi",
+      "distance_m": 32.6,
+      "snapped_node": 1837412280,
+      "in_largest_scc": true
+    },
+    "H12": {
+      "name": "Demo Rajajinagar Hospital",
+      "locality": "Rajajinagar",
+      "distance_m": 61.5,
+      "snapped_node": 14180993949,
+      "in_largest_scc": true
+    },
+    "H13": {
+      "name": "Demo Malleshwaram Hospital",
+      "locality": "Malleshwaram",
+      "distance_m": 22.3,
+      "snapped_node": 610181070,
+      "in_largest_scc": true
+    },
+    "H14": {
+      "name": "Demo Yeshwanthpur Hospital",
+      "locality": "Yeshwanthpur",
+      "distance_m": 72.1,
+      "snapped_node": 6884298286,
+      "in_largest_scc": true
+    },
+    "H15": {
+      "name": "Demo Hebbal Hospital",
+      "locality": "Hebbal",
+      "distance_m": 5.3,
+      "snapped_node": 2460383180,
+      "in_largest_scc": true
+    },
+    "H17": {
+      "name": "Demo RT Nagar Hospital",
+      "locality": "RT Nagar",
+      "distance_m": 47.8,
+      "snapped_node": 582575980,
+      "in_largest_scc": true
+    },
+    "H20": {
+      "name": "Demo Bellandur Hospital",
+      "locality": "Bellandur / Sarjapur Road",
+      "distance_m": 3.8,
+      "snapped_node": 9830778271,
+      "in_largest_scc": true
+    },
+    "H24": {
+      "name": "Demo Vijayanagar Hospital",
+      "locality": "Vijayanagar",
+      "distance_m": 56.8,
+      "snapped_node": 1930100790,
+      "in_largest_scc": true
+    },
+    "H25": {
+      "name": "Demo Nayandahalli Hospital",
+      "locality": "Nayandahalli / Mysore Road",
+      "distance_m": 13.7,
+      "snapped_node": 10041063394,
+      "in_largest_scc": true
+    },
+    "H27": {
+      "name": "Demo Banaswadi Hospital",
+      "locality": "Banaswadi / Kalyan Nagar",
+      "distance_m": 6.7,
+      "snapped_node": 7380160846,
+      "in_largest_scc": true
+    },
+    "H29": {
+      "name": "Demo Domlur Hospital",
+      "locality": "Domlur / HAL",
+      "distance_m": 3.2,
+      "snapped_node": 11337845995,
+      "in_largest_scc": true
+    },
+    "H32": {
+      "name": "Demo Bommanahalli Hospital",
+      "locality": "Bommanahalli",
+      "distance_m": 27.5,
+      "snapped_node": 1417443595,
+      "in_largest_scc": true
+    },
+    "H34": {
+      "name": "Demo Ramamurthy Nagar Hospital",
+      "locality": "Ramamurthy Nagar",
+      "distance_m": 3.0,
+      "snapped_node": 5330660029,
+      "in_largest_scc": true
+    }
+  }
+}

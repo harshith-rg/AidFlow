@@ -8,11 +8,41 @@ import networkx as nx
 import osmnx as ox
 import psutil
 
+import os
+
 # ---------------------------------------------------------------
-# Test area: a SMALL box in central Bengaluru (about 6.5 km x 4.4 km).
-# We do NOT assume which hospitals are inside; the scripts check.
+# Test area bounding box.
+# Default: central Bengaluru test box (west 77.56, south 12.96, east 77.62, north 13.00).
+# Configurable via environment variables (AIDFLOW_BBOX_WEST, AIDFLOW_BBOX_SOUTH,
+# AIDFLOW_BBOX_EAST, AIDFLOW_BBOX_NORTH) or CLI flags.
 # ---------------------------------------------------------------
-BBOX = {"west": 77.56, "south": 12.96, "east": 77.62, "north": 13.00}
+DEFAULT_BBOX = {"west": 77.56, "south": 12.96, "east": 77.62, "north": 13.00}
+
+
+def get_configured_bbox(
+    west: float | None = None,
+    south: float | None = None,
+    east: float | None = None,
+    north: float | None = None,
+) -> dict[str, float]:
+    """Return bounding box from explicit arguments, environment variables, or defaults."""
+    return {
+        "west": float(
+            west if west is not None else os.environ.get("AIDFLOW_BBOX_WEST", DEFAULT_BBOX["west"])
+        ),
+        "south": float(
+            south if south is not None else os.environ.get("AIDFLOW_BBOX_SOUTH", DEFAULT_BBOX["south"])
+        ),
+        "east": float(
+            east if east is not None else os.environ.get("AIDFLOW_BBOX_EAST", DEFAULT_BBOX["east"])
+        ),
+        "north": float(
+            north if north is not None else os.environ.get("AIDFLOW_BBOX_NORTH", DEFAULT_BBOX["north"])
+        ),
+    }
+
+
+BBOX = get_configured_bbox()
 
 # Folder and file locations (relative to this file, so it works anywhere)
 HERE = Path(__file__).resolve().parent

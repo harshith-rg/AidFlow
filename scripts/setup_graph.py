@@ -12,6 +12,9 @@ from pathlib import Path
 
 # Project paths
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 TARGET_GRAPH_FILE = (
     PROJECT_ROOT / "app" / "data" / "graph" / "bengaluru_small_full.graphml"
 )
