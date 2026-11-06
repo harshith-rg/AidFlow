@@ -90,14 +90,20 @@ def _check_file(file_path: Path) -> int:
     """Make sure the file exists and is not empty. Returns its size in bytes."""
     try:
         if not file_path.exists():
-            raise GraphError(f"Road graph file not found: {file_path}")
+            raise GraphError(
+                f"Road graph file not found: {file_path}. "
+                "Run 'python scripts/setup_graph.py' to download and set up the road network."
+            )
         if not file_path.is_file():
             raise GraphError(f"Road graph path is not a file: {file_path}")
         size = file_path.stat().st_size
     except OSError as error:
         raise GraphError(f"Cannot access the road graph file {file_path}: {error}") from error
     if size == 0:
-        raise GraphError(f"Road graph file is empty: {file_path}")
+        raise GraphError(
+            f"Road graph file is empty: {file_path}. "
+            "Run 'python scripts/setup_graph.py' to download and set up the road network."
+        )
     return size
 
 

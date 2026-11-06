@@ -14,7 +14,7 @@ from pydantic import BaseModel
 
 from app.data.hospital_repository import load_repository
 from app.models.schemas import HealthResponse
-from app.services.graph_loader import get_road_graph
+from app.services.graph_loader import GraphError, get_road_graph
 from app.services.routing import find_route
 from app.services.snapping import OutOfCoverageError, snap_hospital, snap_to_road
 
@@ -39,7 +39,16 @@ class DemoRouteRequest(BaseModel):
 
 @router.get("/api/demo/hospitals", summary="List hospitals inside Bengaluru map coverage")
 def demo_hospitals() -> dict[str, Any]:
-    graph = get_road_graph()
+    try:
+        graph = get_road_graph()
+    except GraphError as err:
+        return {
+            "hospitals": [],
+            "warning": (
+                "Road graph file is missing. Please run "
+                "'python scripts/setup_graph.py' to download and set up the road network."
+            ),
+        }
     repo = load_repository()
     hospitals = []
     for h in repo.all():
@@ -219,6 +228,8 @@ DEMO_HTML = """<!DOCTYPE html>
       <div class="subtitle">Central Bengaluru Emergency Ambulance Routing</div>
     </div>
     <div class="content">
+      <div id="graph-warning" style="display:none; background:#7f1d1d; border:1px solid #ef4444; color:#fecaca; padding:12px; border-radius:8px; font-size:12px; line-height:1.4;"></div>
+
       <div class="info-card">
         📍 <strong>Patient / Ambulance Location</strong><br>
         <span id="coords-display">12.9760°N, 77.5920°E</span><br>
@@ -330,6 +341,15 @@ DEMO_HTML = """<!DOCTYPE html>
     fetch('/api/demo/hospitals')
       .then(res => res.json())
       .then(data => {
+        if (data.warning) {
+          const warn = document.getElementById('graph-warning');
+          warn.innerText = '⚠️ ' + data.warning;
+          warn.style.display = 'block';
+          document.getElementById('route-btn').disabled = true;
+          document.getElementById('route-btn').innerText = 'Road Graph Missing';
+          return;
+        }
+
         const select = document.getElementById('hospital-select');
         data.hospitals.forEach(h => {
           const opt = document.createElement('option');
