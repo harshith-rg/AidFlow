@@ -9,19 +9,24 @@
 
 ## Overview
 
-AidFlow is a smart emergency ambulance response and hospital recommendation system prototype. This repository contains **Member 3 (Harshith RG)**'s module: **Road Routing, Distance/ETA Estimation, and Hospital Filtering & Recommendation**.
+AidFlow is a smart emergency ambulance response and hospital recommendation system prototype. This repository contains **Member 3 (Harshith RG)**'s module, currently implemented through **Phases 0–3: Road Routing & Network Preparation**.
 
-The service provides:
-- Custom implementations of **A\*** (with an admissible, scaled Haversine heuristic) and **Dijkstra** routing algorithms.
-- Deterministic **location snapping** from patient/ambulance GPS coordinates to the OpenStreetMap road network.
-- Strict contract error handling returning standardized `{"error": {"code", "message", "details"}}` payloads.
-- An interactive Leaflet map interface at `GET /` to visualize road paths, one-way street asymmetry, intersection nodes, and snapping distances in central Bengaluru.
+Features implemented in Phases 0–3:
+- **Road network loading & cleanup**: Directed multigraph validation, parallel edge collapsing, self-loop removal, and safe heuristic factor computation stored in an immutable, memory-efficient `RoadGraph` structure.
+- **Hospital data management & filtering**: Demo hospital dataset loading, schema validation, operational status checks, emergency specialty filtering, and configurable data staleness detection.
+- **Deterministic location snapping**: Snapping GPS coordinates for patient pickup and hospital locations to the nearest road intersection node within coverage boundaries and distance limits.
+- **Independent routing algorithms**: Custom implementations of **A\*** (with an admissible, scaled Haversine heuristic) and **Dijkstra** algorithms built from scratch using Python's `heapq`.
+- **Algorithm verification**: Agreement tests verifying identical shortest paths and road distances between custom A*, custom Dijkstra, and NetworkX across deterministic synthetic graphs and random trips.
+- **Contract-compliant error handling**: Consistent JSON error formatting returning `{"error": {"code", "message", "details"}}` for `INVALID_COORDINATES`, `INVALID_REQUEST`, `OUT_OF_COVERAGE`, `NO_ROUTE_FOUND`, and `INTERNAL_ERROR`.
+- **Interactive demo map interface**: Leaflet web interface served at `GET /` to visualize road paths, one-way street asymmetry, intersection nodes, and snapping distances in central Bengaluru.
+
+*(Note: Phase 4 ETA/ranking rules and Phase 5 `POST /recommend-hospital` are not yet implemented.)*
 
 ---
 
 ## Requirements
 
-- Python 3.11+ (Python 3.10+ supported)
+- Python 3.11+
 - Windows, macOS, or Linux
 - Virtual environment (`venv`)
 
@@ -31,7 +36,7 @@ The service provides:
 
 ### 1. Clone the repository
 ```bash
-git clone https://github.com/harshith-rg/AidFlow.git
+git clone https://github.com/harshith-rg/AidFlow.git aidflow-routing
 cd aidflow-routing
 ```
 
@@ -66,13 +71,15 @@ Run the automated graph setup script:
 python scripts/setup_graph.py
 ```
 
-This script:
-1. Copies an existing cached graph file if available.
-2. If no graph file is found, automatically downloads the drivable road network for central Bengaluru via OSMnx and installs it in `app/data/graph/bengaluru_small_full.graphml`.
-3. To force a fresh download directly from OpenStreetMap:
-   ```bash
-   python scripts/setup_graph.py --download --force
-   ```
+This script ensures `app/data/graph/bengaluru_small_full.graphml` is ready:
+1. **Uses the existing target graph** at `app/data/graph/bengaluru_small_full.graphml` if already present and non-empty.
+2. **Otherwise, copies `phase0/output/bengaluru_small_full.graphml`** if that file is present.
+3. **Otherwise, downloads from OpenStreetMap** using OSMnx for the central Bengaluru bounding box and installs it at the target path.
+
+To force a fresh download directly from OpenStreetMap:
+```bash
+python scripts/setup_graph.py --download --force
+```
 
 *(Note: `*.graphml` files are git-ignored and never committed.)*
 
