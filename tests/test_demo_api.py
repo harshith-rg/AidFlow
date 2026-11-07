@@ -205,6 +205,8 @@ def test_demo_hospitals_graph_error_internal_error(client: TestClient):
         body = assert_contract_error(resp, 500, ErrorCode.INTERNAL_ERROR)
         assert "scripts/setup_graph.py" in body["error"]["message"]
         assert body["error"]["details"] == {}
+        assert "C:\\" not in resp.text
+        assert "/home" not in resp.text
 
 
 def test_demo_route_graph_error_internal_error(client: TestClient):
@@ -222,3 +224,34 @@ def test_demo_route_graph_error_internal_error(client: TestClient):
         body = assert_contract_error(resp, 500, ErrorCode.INTERNAL_ERROR)
         assert "scripts/setup_graph.py" in body["error"]["message"]
         assert body["error"]["details"] == {}
+        assert "C:\\" not in resp.text
+        assert "/home" not in resp.text
+
+
+def test_missing_graph_response_contains_no_absolute_paths(client: TestClient):
+    """Confirm missing-graph 500 responses leak no absolute file or directory paths."""
+    leak_error = GraphError(r"Cannot load file: C:\Users\harsh\aidflow-routing\app\data\graph\bengaluru_small_full.graphml")
+    with patch("app.api.routes.get_road_graph", side_effect=leak_error):
+        # 1. GET /api/demo/hospitals
+        resp_hosp = client.get("/api/demo/hospitals")
+        assert resp_hosp.status_code == 500
+        assert "C:\\" not in resp_hosp.text
+        assert "/home" not in resp_hosp.text
+        assert "aidflow-routing" not in resp_hosp.text
+        assert "bengaluru_small_full.graphml" not in resp_hosp.text
+
+        # 2. POST /api/demo/route
+        resp_route = client.post(
+            "/api/demo/route",
+            json={
+                "origin_lat": 12.9700,
+                "origin_lng": 77.5900,
+                "hospital_id": "H01",
+                "algorithm": "astar",
+            },
+        )
+        assert resp_route.status_code == 500
+        assert "C:\\" not in resp_route.text
+        assert "/home" not in resp_route.text
+        assert "aidflow-routing" not in resp_route.text
+        assert "bengaluru_small_full.graphml" not in resp_route.text
