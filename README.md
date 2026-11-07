@@ -66,6 +66,8 @@ pip install -r requirements.txt
 
 The service requires the central Bengaluru road network in GraphML format at `app/data/graph/bengaluru_small_full.graphml`.
 
+> **Active Graph Notice**: The application currently loads `app/data/graph/bengaluru_small_full.graphml` (6.47 MB, covering only H01 and H02 of the 37 demo hospitals). The expanded 23-hospital / 72,040-node / 68.52 MB / 1,577.4 MB peak memory dataset was measured on `phase0/output/bengaluru_coverage_box.graphml` as documented in `docs/PHASE0_REPORT.md`, which the application does not load yet.
+
 Run the automated graph setup script:
 ```bash
 python scripts/setup_graph.py
@@ -147,6 +149,6 @@ Test coverage includes:
 
 ## Known Limitations
 
-1. **Coverage Area**: The service operates within the defined Bengaluru bounding box (e.g. `west 77.52, south 12.90, east 77.68, north 13.04`). Coordinates outside this boundary return an `OUT_OF_COVERAGE` contract error.
+1. **Active Road Graph Coverage**: The application currently loads `app/data/graph/bengaluru_small_full.graphml` (6.47 MB), which covers central Bengaluru and contains only H01 and H02 of the 37 demo hospitals. The expanded coverage box numbers (23 hospitals, 72,040 nodes, 187,464 edges, 68.52 MB, 1,577.4 MB peak memory) were measured on `phase0/output/bengaluru_coverage_box.graphml`, which the application does not load yet. Any coordinates outside the loaded graph coverage return an `OUT_OF_COVERAGE` contract error.
 2. **No Live Traffic**: ETAs are calculated assuming a constant nominal urban ambulance speed (default: 30 km/h) without dynamic traffic congestion data.
 3. **Demo Data**: Hospital bed availability, specialty sets, and facility operational statuses are simulated values.
