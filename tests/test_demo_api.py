@@ -97,7 +97,9 @@ def test_demo_route_invalid_coordinates(client: TestClient):
             "algorithm": "astar",
         },
     )
-    assert_contract_error(resp, 400, ErrorCode.INVALID_COORDINATES)
+    body = assert_contract_error(resp, 400, ErrorCode.INVALID_COORDINATES)
+    assert resp.status_code == 400
+    assert body["error"]["code"] == "INVALID_COORDINATES"
 
 
 def test_demo_route_unknown_hospital(client: TestClient):
@@ -119,7 +121,9 @@ def test_demo_route_unknown_hospital(client: TestClient):
                 "algorithm": "astar",
             },
         )
-        assert_contract_error(resp, 400, ErrorCode.INVALID_REQUEST)
+        body = assert_contract_error(resp, 400, ErrorCode.INVALID_REQUEST)
+        assert resp.status_code == 400
+        assert body["error"]["code"] == "INVALID_REQUEST"
 
 
 def test_demo_route_unknown_algorithm(client: TestClient):
@@ -133,7 +137,9 @@ def test_demo_route_unknown_algorithm(client: TestClient):
             "algorithm": "floyd_warshall",
         },
     )
-    assert_contract_error(resp, 400, ErrorCode.INVALID_REQUEST)
+    body = assert_contract_error(resp, 400, ErrorCode.INVALID_REQUEST)
+    assert resp.status_code == 400
+    assert body["error"]["code"] == "INVALID_REQUEST"
 
 
 def test_demo_route_out_of_coverage(client: TestClient):
@@ -192,8 +198,17 @@ def test_demo_route_no_route_found_unreachable(client: TestClient):
         assert_contract_error(resp, 422, ErrorCode.NO_ROUTE_FOUND)
 
 
+def test_demo_hospitals_graph_error_internal_error(client: TestClient):
+    """When road graph cannot be loaded, GET /api/demo/hospitals returns 500 INTERNAL_ERROR naming scripts/setup_graph.py."""
+    with patch("app.api.routes.get_road_graph", side_effect=GraphError("Graph file missing")):
+        resp = client.get("/api/demo/hospitals")
+        body = assert_contract_error(resp, 500, ErrorCode.INTERNAL_ERROR)
+        assert "scripts/setup_graph.py" in body["error"]["message"]
+        assert body["error"]["details"] == {}
+
+
 def test_demo_route_graph_error_internal_error(client: TestClient):
-    """When road graph cannot be loaded, returns 500 INTERNAL_ERROR."""
+    """When road graph cannot be loaded, POST /api/demo/route returns 500 INTERNAL_ERROR naming scripts/setup_graph.py."""
     with patch("app.api.routes.get_road_graph", side_effect=GraphError("Graph file missing")):
         resp = client.post(
             "/api/demo/route",
@@ -204,4 +219,6 @@ def test_demo_route_graph_error_internal_error(client: TestClient):
                 "algorithm": "astar",
             },
         )
-        assert_contract_error(resp, 500, ErrorCode.INTERNAL_ERROR)
+        body = assert_contract_error(resp, 500, ErrorCode.INTERNAL_ERROR)
+        assert "scripts/setup_graph.py" in body["error"]["message"]
+        assert body["error"]["details"] == {}

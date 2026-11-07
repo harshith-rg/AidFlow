@@ -5,6 +5,7 @@ Phase 3 adds an interactive Leaflet map interface at GET / and demo routing APIs
 POST /recommend-hospital is added in Phase 5.
 """
 
+import logging
 import time
 from typing import Any
 
@@ -20,6 +21,7 @@ from app.services.graph_loader import GraphError, get_road_graph
 from app.services.routing import PathNotFoundError, find_route
 from app.services.snapping import OutOfCoverageError, snap_hospital, snap_to_road
 
+logger = logging.getLogger("aidflow.api")
 router = APIRouter()
 
 
@@ -44,13 +46,13 @@ def demo_hospitals() -> dict[str, Any]:
     try:
         graph = get_road_graph()
     except GraphError as err:
-        return {
-            "hospitals": [],
-            "warning": (
-                "Road graph file is missing. Please run "
-                "'python scripts/setup_graph.py' to download and set up the road network."
-            ),
-        }
+        logger.error("Failed to load road graph: %s", err)
+        raise AidFlowError(
+            ErrorCode.INTERNAL_ERROR,
+            "Road graph file not found. Run: python scripts/setup_graph.py",
+            500,
+            {},
+        ) from err
     repo = load_repository()
     hospitals = []
     for h in repo.all():
@@ -94,10 +96,12 @@ def demo_route(req: DemoRouteRequest) -> dict[str, Any]:
     try:
         graph = get_road_graph()
     except GraphError as err:
+        logger.error("Failed to load road graph: %s", err)
         raise AidFlowError(
             ErrorCode.INTERNAL_ERROR,
-            f"Road graph is not available: {err}",
+            "Road graph file not found. Run: python scripts/setup_graph.py",
             500,
+            {},
         ) from err
 
     repo = load_repository()
@@ -402,19 +406,21 @@ DEMO_HTML = """<!DOCTYPE html>
 
     // 2. Fetch Hospitals inside coverage
     fetch('/api/demo/hospitals')
-      .then(res => res.json())
-      .then(data => {
-        if (data.warning) {
-          const warn = document.getElementById('graph-warning');
-          warn.innerText = '⚠️ ' + data.warning;
-          warn.style.display = 'block';
-          document.getElementById('route-btn').disabled = true;
-          document.getElementById('route-btn').innerText = 'Road Graph Missing';
-          return;
+      .then(async res => {
+        const body = await res.json();
+        if (!res.ok) {
+          const msg = (body && body.error && body.error.message)
+            ? body.error.message
+            : "Failed to load hospital list.";
+          throw new Error(msg);
         }
-
+        return body;
+      })
+      .then(data => {
+        const warn = document.getElementById('graph-warning');
+        if (warn) { warn.style.display = 'none'; }
         const select = document.getElementById('hospital-select');
-        data.hospitals.forEach(h => {
+        (data.hospitals || []).forEach(h => {
           const opt = document.createElement('option');
           opt.value = h.hospital_id;
           opt.innerText = `[${h.hospital_id}] ${h.name} (${h.locality})`;
@@ -431,8 +437,20 @@ DEMO_HTML = """<!DOCTYPE html>
           hospitalMarkers[h.hospital_id] = marker;
         });
 
-        if (data.hospitals.length > 0) {
+        if (data.hospitals && data.hospitals.length > 0) {
           selectHospital(data.hospitals[0].hospital_id);
+        }
+      })
+      .catch(err => {
+        const warn = document.getElementById('graph-warning');
+        if (warn) {
+          warn.innerText = '⚠️ ' + err.message;
+          warn.style.display = 'block';
+        }
+        const btn = document.getElementById('route-btn');
+        if (btn) {
+          btn.disabled = true;
+          btn.innerText = 'Road Graph Missing';
         }
       });
 
