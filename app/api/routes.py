@@ -112,30 +112,7 @@ def recommend_hospital(
             {"max_alternatives": max_alt},
         )
 
-    # 4. Load Road Graph
-    try:
-        graph = get_road_graph()
-    except GraphError as err:
-        logger.error("Failed to load road graph: %s", err)
-        raise AidFlowError(
-            ErrorCode.INTERNAL_ERROR,
-            "Road graph file not found. Run: python scripts/setup_graph.py",
-            500,
-            {},
-        ) from err
-
-    # 5. Snap origin to road
-    try:
-        snap_origin = snap_to_road(graph, req.origin.lat, req.origin.lng)
-    except OutOfCoverageError as err:
-        raise AidFlowError(
-            ErrorCode.OUT_OF_COVERAGE,
-            str(err),
-            422,
-            {"origin": {"lat": req.origin.lat, "lng": req.origin.lng}},
-        ) from err
-
-    # 6. Candidate hospitals and repository
+    # 4. Candidate hospitals and repository validation (before graph loading)
     repo = load_repository()
     if req.candidate_hospital_ids is not None:
         if len(req.candidate_hospital_ids) == 0:
@@ -164,6 +141,29 @@ def recommend_hospital(
                 candidate_hospitals.append(repo.get(hid))  # type: ignore[arg-type]
     else:
         candidate_hospitals = list(repo.all())
+
+    # 5. Load Road Graph
+    try:
+        graph = get_road_graph()
+    except GraphError as err:
+        logger.error("Failed to load road graph: %s", err)
+        raise AidFlowError(
+            ErrorCode.INTERNAL_ERROR,
+            "Road graph file not found. Run: python scripts/setup_graph.py",
+            500,
+            {},
+        ) from err
+
+    # 6. Snap origin to road
+    try:
+        snap_origin = snap_to_road(graph, req.origin.lat, req.origin.lng)
+    except OutOfCoverageError as err:
+        raise AidFlowError(
+            ErrorCode.OUT_OF_COVERAGE,
+            str(err),
+            422,
+            {"origin": {"lat": req.origin.lat, "lng": req.origin.lng}},
+        ) from err
 
     # 7. Filter hospitals
     settings: Settings = getattr(request.app.state, "settings", None) or load_settings()

@@ -56,6 +56,13 @@ class OriginCoordinates(BaseModel):
     lat: float
     lng: float
 
+    @field_validator("lat", "lng", mode="before")
+    @classmethod
+    def check_coordinates_strict_number(cls, v: Any, info) -> Any:
+        if isinstance(v, bool) or not isinstance(v, (int, float)):
+            raise ValueError(f"{info.field_name} must be a number, not boolean or string")
+        return float(v)
+
 
 class RecommendHospitalRequest(BaseModel):
     """Request payload for POST /recommend-hospital (CONTRACT.md section 4)."""
@@ -68,10 +75,15 @@ class RecommendHospitalRequest(BaseModel):
 
     @field_validator("max_alternatives", mode="before")
     @classmethod
-    def check_max_alternatives_not_bool(cls, v: Any) -> Any:
-        if isinstance(v, bool):
-            raise ValueError("max_alternatives must be an integer, not boolean")
+    def check_max_alternatives_strict_int(cls, v: Any) -> Any:
+        if v is None:
+            return 2
+        if isinstance(v, bool) or not isinstance(v, int):
+            raise ValueError("max_alternatives must be an integer, not boolean, string, or float")
+        if v < 0 or v > 5:
+            raise ValueError(f"max_alternatives must be between 0 and 5, but got {v}")
         return v
+
 
 
 
