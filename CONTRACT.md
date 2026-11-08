@@ -1,9 +1,9 @@
 # AidFlow Routing & Hospital Recommendation: Interface Contract
 
-**Status:** DRAFT v0.1 (proposal, open for changes)
+**Status:** DRAFT v0.2 (proposal, open for changes)
 **Owner:** Harshith RG (Member 3)
 **Reviewers:** Hema (M2, backend/dispatch), Chitte (M1, frontend), Bindu (M4, location)
-**Reply deadline:** _<fill in: 2 days from sending>_. If there are no objections by then, v0.1 becomes the working version.
+**Reply deadline:** _<fill in: 2 days from sending>_. If there are no objections by then, v0.2 becomes the working version.
 
 > Prototype scope. Hospital values are **demo data**. ETA is an **estimate** with no live traffic.
 
@@ -68,7 +68,7 @@ Optional: `GET /health` returns `{ "status": "ok" }`.
     "hospital_id": "H02",
     "name": "Demo City Hospital",
     "location": { "lat": 12.9352, "lng": 77.6245 },
-    "distance_km": 4.2,
+    "distance_km": 4.5,
     "eta_min": 9.0,
     "reason": "Nearest open hospital with ICU (9.0 min ETA).",
     "bed_data_stale": false
@@ -77,7 +77,7 @@ Optional: `GET /health` returns `{ "status": "ok" }`.
     {
       "hospital_id": "H01",
       "name": "Demo General Hospital",
-      "distance_km": 6.1,
+      "distance_km": 6.5,
       "eta_min": 13.0,
       "reason": "Open with ICU, 4.0 min slower than recommended.",
       "bed_data_stale": false
@@ -85,7 +85,7 @@ Optional: `GET /health` returns `{ "status": "ok" }`.
   ],
   "route": {
     "to_hospital_id": "H02",
-    "distance_km": 4.2,
+    "distance_km": 4.5,
     "eta_min": 9.0,
     "polyline": [[12.9716, 77.5946], [12.9700, 77.5990], [12.9352, 77.6245]]
   },
@@ -184,3 +184,4 @@ Each hospital record in my dataset:
 | Version | Date | Change |
 |---|---|---|
 | 0.1 | 2026-10-31 | First draft by Harshith RG |
+| 0.2 | 2026-11-08 | Section 5 sample response: distances corrected (4.2 to 4.5 km, 6.1 to 6.5 km) so the sample matches the section 9 ETA formula at 30 km/h. No rule changes. |
