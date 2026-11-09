@@ -266,13 +266,24 @@ def test_random_trip_agreement_with_bad_data_heuristic_safety(seed):
 # ---------------------------------------------------------------------------
 # Real Bengaluru Graph Integration Check (when file is available)
 # ---------------------------------------------------------------------------
+# The exact numbers below (162 m, 5.01 km, 46 nodes, ...) were measured in Phase 0 on the SMALL
+# central-Bengaluru graph. The service now loads the larger coverage-box graph by default, so this
+# test names the small graph explicitly instead of using the default. It is skipped if that file
+# is not on this computer (the larger graph is checked in tests/test_real_map_scenarios.py).
+SMALL_GRAPH_CANDIDATES = (
+    DEFAULT_GRAPH_PATH.parent / "bengaluru_small_full.graphml",
+    DEFAULT_GRAPH_PATH.parents[3] / "phase0" / "output" / "bengaluru_small_full.graphml",
+)
+SMALL_GRAPH_PATH = next((p for p in SMALL_GRAPH_CANDIDATES if p.is_file()), None)
+
+
 @pytest.mark.skipif(
-    not DEFAULT_GRAPH_PATH.exists(),
-    reason="Bengaluru GraphML file not found locally",
+    SMALL_GRAPH_PATH is None,
+    reason="Small Bengaluru GraphML file (Phase 0 graph) not found locally",
 )
 def test_real_bengaluru_graph_snapping_and_routing():
-    """Verify Phase 3 routing against the real Bengaluru road graph and Phase 0 results."""
-    graph = get_road_graph()
+    """Verify Phase 3 routing against the small Bengaluru road graph and Phase 0 results."""
+    graph = get_road_graph(SMALL_GRAPH_PATH)
 
     # Known demo hospital coordinates
     h01_coords = (12.9767, 77.5713)

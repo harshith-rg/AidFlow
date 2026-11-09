@@ -15,7 +15,9 @@ from app.api.routes import router
 from app.core.config import ConfigError, Settings, load_settings
 from app.services.graph_loader import GraphError, get_road_graph
 
-logger = logging.getLogger("aidflow.server")
+# Uvicorn's own logger, so the startup messages are visible in the console while the
+# graph loads (the default "aidflow.*" loggers print nothing below WARNING).
+logger = logging.getLogger("uvicorn.error")
 
 # Addresses where the React demo UI will run during local development.
 ALLOWED_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"]
@@ -34,7 +36,7 @@ async def lifespan(app: FastAPI):
     if getattr(settings, "preload_graph", True):
         t0 = time.perf_counter()
         try:
-            logger.info("Preloading active road graph at server startup...")
+            logger.info("Preloading the road graph (this can take 20 to 80 seconds)...")
             graph = get_road_graph()
             elapsed = time.perf_counter() - t0
             app.state.graph_startup_time_s = elapsed
@@ -46,7 +48,7 @@ async def lifespan(app: FastAPI):
             )
         except GraphError as err:
             logger.warning(
-                "Road graph could not be loaded at server startup: %s. "
+                "Road graph could not be loaded at server startup: %s "
                 "The server will still run, and routing endpoints will return "
                 "the contract-specified error until scripts/setup_graph.py is run.",
                 err,
