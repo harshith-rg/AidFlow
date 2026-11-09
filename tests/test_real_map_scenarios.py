@@ -1,7 +1,9 @@
 """Phase 6.3: scenario tests on the REAL road map (opt-in, slow).
 
-These tests call POST /recommend-hospital on the larger Bengaluru graph
-(phase0/output/bengaluru_coverage_box.graphml, 23 of 37 demo hospitals).
+These tests call POST /recommend-hospital on the larger Bengaluru graph, the one the
+service loads by default (app/data/graph/bengaluru_coverage_box.graphml, installed by
+`python scripts/setup_graph.py`; 23 of 37 demo hospitals). If that file is missing, the
+Phase 0 copy in phase0/output/ is used.
 
 They are OFF by default because loading that graph takes 20 to 80 seconds and
 about 1.4 GB of memory. They are skipped unless BOTH are true:
@@ -35,15 +37,16 @@ from app.core.config import Settings
 from app.data.hospital_repository import load_repository
 from app.main import create_app
 from app.services.geo import haversine_m
-from app.services.graph_loader import load_road_graph
+from app.services.graph_loader import DEFAULT_GRAPH_PATH, load_road_graph
 from app.services.routing import find_route
 from app.services.snapping import OutOfCoverageError, snap_hospital, snap_to_road
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PHASE0_COPY = PROJECT_ROOT / "phase0" / "output" / "bengaluru_coverage_box.graphml"
 GRAPH_PATH = Path(
     os.environ.get(
         "AIDFLOW_REAL_GRAPH_PATH",
-        PROJECT_ROOT / "phase0" / "output" / "bengaluru_coverage_box.graphml",
+        DEFAULT_GRAPH_PATH if DEFAULT_GRAPH_PATH.is_file() else PHASE0_COPY,
     )
 )
 
@@ -139,6 +142,25 @@ def test_s1_larger_graph_reaches_most_central_hospitals(reachable):
     assert len(reachable) >= 20  # measured 23 of 37 in Phase 0
     assert {"H01", "H02"} <= reachable
     assert OUTSIDE_AREA not in reachable  # H37 is deliberately outside the area
+
+
+def test_s1b_phase0_reference_routes_still_hold_on_the_larger_graph(graph, repo, reachable):
+    """The larger graph contains every road of the small Phase 0 graph, so a shortest route
+    can only stay the same or get shorter (Phase 0: H01 -> H02 5.01 km, H02 -> H01 4.53 km)."""
+    require(reachable, "H01", "H02")
+    h01, h02 = repo.get("H01"), repo.get("H02")
+    snap1, snap2 = snap_hospital(graph, h01), snap_hospital(graph, h02)
+    assert snap1.distance_m == pytest.approx(162, abs=1.5)  # Phase 0 snapping distances
+    assert snap2.distance_m == pytest.approx(8, abs=1.5)
+
+    straight_km = haversine_m(
+        h01.location.lat, h01.location.lng, h02.location.lat, h02.location.lng
+    ) / 1000
+    for source, target, small_graph_km in ((snap1, snap2, 5.01), (snap2, snap1, 4.53)):
+        astar = find_route(graph, source.node_id, target.node_id, "astar")
+        dijkstra = find_route(graph, source.node_id, target.node_id, "dijkstra")
+        assert astar.total_distance_m == pytest.approx(dijkstra.total_distance_m, rel=1e-7)
+        assert straight_km - 0.4 <= astar.total_distance_m / 1000 <= small_graph_km + 0.05
 
 
 # ---------------------------------------------------------------------------

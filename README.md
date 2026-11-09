@@ -81,14 +81,23 @@ python scripts/setup_graph.py
 This script ensures `app/data/graph/bengaluru_coverage_box.graphml` is ready:
 1. **Uses the existing target graph** at `app/data/graph/bengaluru_coverage_box.graphml` if already present and non-empty.
 2. **Otherwise, copies `phase0/output/bengaluru_coverage_box.graphml`** if that file is present.
-3. **Otherwise, downloads from OpenStreetMap** using OSMnx for the expanded Bengaluru coverage box (`west=77.52, south=12.90, east=77.68, north=13.04`) and installs it at the target path.
+3. **Otherwise, downloads from OpenStreetMap** using OSMnx for the expanded Bengaluru coverage box (`west=77.52, south=12.90, east=77.68, north=13.04`) and installs it at the target path. This needs internet access, takes several minutes and about 1.5 GB of memory. A copy from `phase0/output/` leaves the source file untouched.
+
+Files are written under a temporary name (`*.graphml.part`) and renamed only when complete, so an interrupted run never leaves a half-written graph.
 
 To force a fresh download directly from OpenStreetMap:
 ```bash
 python scripts/setup_graph.py --download --force
 ```
 
-*(Note: `*.graphml` files are git-ignored and never committed.)*
+*(Note: `*.graphml` and `*.graphml.part` files are git-ignored and never committed, so a fresh clone has no graph until you run the setup script. Road data is (c) OpenStreetMap contributors, ODbL.)*
+
+**Settings for the graph** (environment variables, all optional):
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `AIDFLOW_PRELOAD_GRAPH` | `true` | Load the graph when the server starts. `false` loads it on the first request instead, which then takes 20 to 80 s. |
+| `AIDFLOW_GRAPH_PATH` | the default file above | Load a different GraphML file. The setup script always installs the default file. |
 
 ---
 
@@ -99,6 +108,10 @@ Start the FastAPI application with Uvicorn:
 ```bash
 uvicorn app.main:app --reload
 ```
+
+**Startup:** the server loads the road graph once before it accepts requests, so the first request is not slow. This takes about 20 to 80 seconds. The console shows `Preloading the road graph...` and then `Road graph preloaded in ... s`. With `--reload`, every code change restarts the server and reloads the graph.
+
+**If the graph is missing or unreadable**, the server still starts and logs `Road graph could not be loaded at server startup`. `GET /health` keeps working, and every endpoint that needs the graph returns the contract error `INTERNAL_ERROR` (HTTP 500) with `{"error": {"code", "message", "details"}}`. Request problems (for example bad coordinates) still get their own 400 error. After you install the graph, the next request loads it, with no restart needed.
 
 Once started, the following endpoints are available:
 
@@ -237,6 +250,8 @@ Test coverage includes:
 - **Demo API & Contract errors**: Validation of `INVALID_COORDINATES`, `INVALID_REQUEST`, `OUT_OF_COVERAGE`, `NO_ROUTE_FOUND`, and `INTERNAL_ERROR`.
 - **Phase 4 ETA, ranking & reasons**: Unit tests plus scenario tests (`tests/test_phase4_scenarios.py`) that run the demo hospitals through filter, ETA, ranking and reason sentences using a fixed distance table and a fixed clock. They need no road graph or API.
 - **Phase 5 endpoint**: `tests/test_recommend_hospital.py` calls `POST /recommend-hospital` against an in-memory synthetic road graph (no `.graphml` file needed). It covers the response shape, `max_alternatives` limits, candidate IDs, strict coordinate and number validation, validation before graph loading, the error codes, the stale warning in both clock modes, and `generated_at` being the real current time.
+- **Phase 6 startup and setup**: `tests/test_startup_graph.py` runs the real app and checks that the graph loads once at startup, that a missing or unreadable graph does not stop the service (500 `INTERNAL_ERROR` in the contract shape, `/health` still works, bad requests keep their own error), that installing the graph later needs no restart, and the two graph settings. `tests/test_setup_graph.py` checks the setup script (keep, copy, download fallback, no partial files, source never changed) and that no `.graphml` file is tracked by git. Both use temporary fake files only.
+- **Real-map scenarios (opt-in)**: `tests/test_real_map_scenarios.py` runs `POST /recommend-hospital` on the real larger graph. It is skipped by default because loading the graph takes 20 to 80 seconds. To run it (Windows Command Prompt): `set AIDFLOW_RUN_REAL_MAP_TESTS=1` then `pytest tests\test_real_map_scenarios.py -v`.
 
 ---
 
@@ -280,9 +295,7 @@ Proposal details and approval status for P1, P2 and P10 (ranking) and for P3, P4
 ## Known Limitations
 
 1. **Active Road Graph Coverage**: The application loads the larger measured Bengaluru road graph (`app/data/graph/bengaluru_coverage_box.graphml`, 68.52 MB), which covers 23 of the 37 demo hospitals. The remaining 14 demo hospitals (H16, H18, H19, H21, H22, H23, H26, H28, H30, H31, H33, H35, H36, H37) lie outside the graph boundary. Any pickup coordinates outside this coverage area return an `OUT_OF_COVERAGE` contract error (422), and hospitals outside coverage are skipped during routing (or return `NO_ROUTE_FOUND` if only those hospitals are requested).
-2. **Server Startup Preload and Request Performance**: Measured on the startup-preloaded version (`app/data/graph/bengaluru_coverage_box.graphml`, 72,040 nodes, 187,464 edges):
-   - **Startup preload (graph load)**: 23.14 seconds to load the road graph into memory at server startup (~1,363 MB peak memory, ~570 MB resident memory).
-   - **Request time (post-startup)**: Once the graph is preloaded at startup, requests do not pay the graph-load delay. Across tested pickup points, requests had a median of 611 ms with a range of 276–1,022 ms.
+2. **Server Startup Preload and Request Performance**: The graph (72,040 nodes, 187,464 edges, 68.52 MB) is loaded once at startup. Load time was 20.1 s, 23.1 s, 26.8 s and 78.1 s on different runs, with peak memory about 1.4 to 1.6 GB (1,362 to 1,577 MB). Once it is loaded, `POST /recommend-hospital` was measured with `python scripts\measure_recommend.py --graph <graph file>` (15 requests, 5 pickup points, demo clock, 0 failures): typical 1.4 s, slowest 4.0 s. Every request routes to every eligible hospital, so this suits a single-user demo, not many simultaneous callers.
 3. **Demo Clock**: With the default `AIDFLOW_TIME_MODE=real`, every demo hospital counts as stale because the dataset is dated 2026-10-31, so ranking ignores bed counts and every response carries `STALE_HOSPITAL_DATA`. Run with `AIDFLOW_TIME_MODE=demo` for demonstrations.
 4. **No Live Traffic**: ETAs are calculated assuming a constant nominal urban ambulance speed (default: 30 km/h) without dynamic traffic congestion data.
 5. **Demo Data**: Hospital bed availability, specialty sets, and facility operational statuses are simulated values.

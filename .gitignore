@@ -4,4 +4,5 @@ __pycache__/
 *.pyc
 phase0/cache/
 *.graphml
+*.graphml.part
 .env
