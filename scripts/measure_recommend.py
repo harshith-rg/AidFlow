@@ -44,12 +44,14 @@ from app.services.snapping import OutOfCoverageError, snap_hospital
 DEFAULT_GRAPH = PROJECT_ROOT / "phase0" / "output" / "bengaluru_coverage_box.graphml"
 
 # Pickup points inside the larger coverage box (west 77.52, south 12.90, east 77.68, north 13.04).
+# Each is 0.6 to 1.8 km from the nearest demo hospital. Do NOT use a hospital's own
+# coordinates here: the pickup would snap to the hospital's road node and give 0.0 min.
 ORIGINS = [
-    ("Majestic", 12.9767, 77.5713),
-    ("Indiranagar", 12.9784, 77.6408),
-    ("Koramangala", 12.9352, 77.6245),
-    ("Hebbal", 13.0358, 77.5970),
-    ("Jayanagar", 12.9250, 77.5938),
+    ("Cubbon Park", 12.9763, 77.5929),
+    ("Indiranagar", 12.9719, 77.6412),
+    ("Koramangala", 12.9347, 77.6191),
+    ("Hebbal", 13.0300, 77.5900),
+    ("Jayanagar", 12.9308, 77.5838),
 ]
 
 # "[]" (any open hospital) is the heaviest case: it routes to every hospital in the graph.
