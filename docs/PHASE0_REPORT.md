@@ -1,6 +1,6 @@
 # Phase 0 Report: Road-Network Feasibility Test
 
-> **Current Graph Loading Notice**: The application currently loads `app/data/graph/bengaluru_small_full.graphml` (6.47 MB, covering only H01 and H02 of the 37 demo hospitals). The 23-hospital / 72,040-node / 68.52 MB / 1,577.4 MB-peak numbers reported in the expanded section below were MEASURED on `phase0/output/bengaluru_coverage_box.graphml`, which the application does not load yet. All numbers below are preserved exactly as measured.
+> **Current Graph Loading Notice**: As of Phase 6 the application loads the larger coverage-box graph, `app/data/graph/bengaluru_coverage_box.graphml` (68.52 MB, 23 of the 37 demo hospitals), installed by `python scripts/setup_graph.py`. The first section below describes the small Phase 0 test graph (6.47 MB, H01 and H02 only), which the application no longer loads. All numbers below are preserved exactly as measured.
 
 Area: central Bengaluru test box (west 77.56, south 12.96, east 77.62, north 13.00).
 
@@ -33,7 +33,7 @@ All hospital data is fictional DEMO data.
 ## Expanded Coverage Box Feasibility Report (Task 2 Decision)
 
 Area: expanded Bengaluru coverage box (west 77.52, south 12.90, east 77.68, north 13.04).  
-*Note: Measured on `phase0/output/bengaluru_coverage_box.graphml` (68.52 MB). The application currently continues to load `app/data/graph/bengaluru_small_full.graphml`.*
+*Note: Measured on `phase0/output/bengaluru_coverage_box.graphml` (68.52 MB). Since Phase 6 this is the graph the application loads by default (see the notice at the top).*
 
 | Measurement | Result |
 |---|---|

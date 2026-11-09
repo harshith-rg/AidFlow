@@ -51,8 +51,10 @@ __all__ = [
 ]
 
 # app/services/graph_loader.py -> parent = services, parent.parent = app
+# The active graph is the larger coverage-box graph (west 77.52, south 12.90, east 77.68,
+# north 13.04; 23 of the 37 demo hospitals). Install it with: python scripts/setup_graph.py
 DEFAULT_GRAPH_PATH = (
-    Path(__file__).resolve().parent.parent / "data" / "graph" / "bengaluru_small_full.graphml"
+    Path(__file__).resolve().parent.parent / "data" / "graph" / "bengaluru_coverage_box.graphml"
 )
 
 # Safety margin from the approved heuristic rule (absorbs rounding errors).
