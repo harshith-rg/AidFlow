@@ -7,6 +7,7 @@ Phase 5 implements POST /recommend-hospital (CONTRACT.md sections 3-5).
 
 import logging
 import time
+from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, Request
@@ -310,7 +311,7 @@ def recommend_hospital(
         hospital_data="DEMO values, not real",
     )
 
-    generated_at = reference.value.strftime("%Y-%m-%dT%H:%M:%SZ")
+    generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     return RecommendHospitalResponse(
         case_id=req.case_id,
