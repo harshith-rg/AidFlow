@@ -11,6 +11,7 @@ def test_defaults_match_the_agreed_values():
     assert settings.average_speed_kmh == 30
     assert settings.stale_after_minutes == 60
     assert settings.enable_demo_endpoints is False
+    assert settings.preload_graph is True
     assert settings == Settings()
 
 
@@ -21,12 +22,14 @@ def test_valid_overrides_are_applied():
             "AIDFLOW_AVERAGE_SPEED_KMH": "40",
             "AIDFLOW_STALE_AFTER_MINUTES": "90",
             "AIDFLOW_ENABLE_DEMO_ENDPOINTS": "true",
+            "AIDFLOW_PRELOAD_GRAPH": "false",
         }
     )
     assert settings.time_mode == "demo"
     assert settings.average_speed_kmh == 40
     assert settings.stale_after_minutes == 90
     assert settings.enable_demo_endpoints is True
+    assert settings.preload_graph is False
 
 
 def test_time_mode_ignores_case_and_spaces():

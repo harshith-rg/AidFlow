@@ -52,7 +52,7 @@ __all__ = [
 
 # app/services/graph_loader.py -> parent = services, parent.parent = app
 DEFAULT_GRAPH_PATH = (
-    Path(__file__).resolve().parent.parent / "data" / "graph" / "bengaluru_small_full.graphml"
+    Path(__file__).resolve().parent.parent / "data" / "graph" / "bengaluru_coverage_box.graphml"
 )
 
 # Safety margin from the approved heuristic rule (absorbs rounding errors).
@@ -73,8 +73,12 @@ class GraphError(Exception):
 # Step 1: path and file checks
 # ---------------------------------------------------------------------------
 def _resolve_path(path: object) -> Path:
-    """Absolute path of the graph file (default: DEFAULT_GRAPH_PATH)."""
-    candidate = DEFAULT_GRAPH_PATH if path is None else path
+    """Absolute path of the graph file (default: DEFAULT_GRAPH_PATH or AIDFLOW_GRAPH_PATH)."""
+    if path is None:
+        env_path = os.environ.get("AIDFLOW_GRAPH_PATH")
+        candidate = Path(env_path) if env_path else DEFAULT_GRAPH_PATH
+    else:
+        candidate = path
     if not isinstance(candidate, (str, os.PathLike)):
         raise GraphError(
             "The graph path must be a string or a Path, "

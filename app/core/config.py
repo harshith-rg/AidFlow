@@ -30,6 +30,8 @@ class Settings:
     stale_after_minutes: float = 60.0  # CONTRACT.md section 8
     # Switch for the PROPOSED GET /hospitals endpoints (not built yet).
     enable_demo_endpoints: bool = False
+    # Preload the road graph at server startup so the first request pays no load delay
+    preload_graph: bool = True
 
 
 def _read_float(env: Mapping[str, str], name: str, default: float) -> float:
@@ -80,10 +82,12 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         raise ConfigError("AIDFLOW_STALE_AFTER_MINUTES must not be negative.")
 
     demo_endpoints = _read_bool(env, "AIDFLOW_ENABLE_DEMO_ENDPOINTS", False)
+    preload_graph = _read_bool(env, "AIDFLOW_PRELOAD_GRAPH", True)
 
     return Settings(
         time_mode=time_mode,
         average_speed_kmh=speed,
         stale_after_minutes=stale,
         enable_demo_endpoints=demo_endpoints,
+        preload_graph=preload_graph,
     )
