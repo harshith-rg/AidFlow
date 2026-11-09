@@ -3,15 +3,56 @@
 Run it with:   uvicorn app.main:app --reload
 """
 
+import logging
+import time
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.errors import register_error_handlers
 from app.api.routes import router
 from app.core.config import ConfigError, Settings, load_settings
+from app.services.graph_loader import GraphError, get_road_graph
+
+logger = logging.getLogger("aidflow.server")
 
 # Addresses where the React demo UI will run during local development.
 ALLOWED_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"]
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan context manager for the application.
+
+    Preloads the configured active road graph at server startup so that incoming
+    requests do not pay the graph-load delay. If the road graph file is missing
+    or invalid, the server still starts normally, and endpoints return the contract-shaped
+    500 INTERNAL_ERROR error when called.
+    """
+    settings: Settings = getattr(app.state, "settings", None) or load_settings()
+    if getattr(settings, "preload_graph", True):
+        t0 = time.perf_counter()
+        try:
+            logger.info("Preloading active road graph at server startup...")
+            graph = get_road_graph()
+            elapsed = time.perf_counter() - t0
+            app.state.graph_startup_time_s = elapsed
+            logger.info(
+                "Road graph preloaded in %.2f s (%d nodes, %d edges).",
+                elapsed,
+                graph.node_count,
+                graph.edge_count,
+            )
+        except GraphError as err:
+            logger.warning(
+                "Road graph could not be loaded at server startup: %s. "
+                "The server will still run, and routing endpoints will return "
+                "the contract-specified error until scripts/setup_graph.py is run.",
+                err,
+            )
+            app.state.graph_startup_time_s = None
+    yield
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -25,6 +66,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "ETA is an estimate with no live traffic."
         ),
         version="0.1.0",
+        lifespan=lifespan,
     )
     app.state.settings = settings
 

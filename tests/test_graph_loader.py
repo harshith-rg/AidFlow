@@ -246,7 +246,7 @@ def test_random_graphs_survive_a_save_and_load(tmp_path):
 def test_default_path_is_the_project_graph_file():
     assert DEFAULT_GRAPH_PATH.is_absolute()
     assert DEFAULT_GRAPH_PATH == (
-        PROJECT_ROOT / "app" / "data" / "graph" / "bengaluru_small_full.graphml"
+        PROJECT_ROOT / "app" / "data" / "graph" / "bengaluru_coverage_box.graphml"
     )
 
 

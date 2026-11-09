@@ -69,19 +69,19 @@ pip install -r requirements.txt
 
 ## Road Network Setup
 
-The service requires the central Bengaluru road network in GraphML format at `app/data/graph/bengaluru_small_full.graphml`.
+The service uses the expanded Bengaluru road network in GraphML format at `app/data/graph/bengaluru_coverage_box.graphml` (68.52 MB, covering 23 of 37 demo hospitals: H01–H15, H17, H20, H24, H25, H27, H29, H32, H34; 72,040 nodes, 187,464 directed edges).
 
-> **Active Graph Notice**: The application currently loads `app/data/graph/bengaluru_small_full.graphml` (6.47 MB, covering only H01 and H02 of the 37 demo hospitals). The expanded 23-hospital / 72,040-node / 68.52 MB / 1,577.4 MB peak memory dataset was measured on `phase0/output/bengaluru_coverage_box.graphml` as documented in `docs/PHASE0_REPORT.md`, which the application does not load yet.
+> **Active Graph Configuration**: The application configures `app/data/graph/bengaluru_coverage_box.graphml` as its active graph and preloads it into memory at server startup so incoming requests do not pay the graph-load delay. If the file is missing, the server still starts cleanly and routing endpoints return the contract-specified HTTP 500 `INTERNAL_ERROR` naming `scripts/setup_graph.py`.
 
-Run the automated graph setup script:
+Run the automated graph setup script on a fresh clone:
 ```bash
 python scripts/setup_graph.py
 ```
 
-This script ensures `app/data/graph/bengaluru_small_full.graphml` is ready:
-1. **Uses the existing target graph** at `app/data/graph/bengaluru_small_full.graphml` if already present and non-empty.
-2. **Otherwise, copies `phase0/output/bengaluru_small_full.graphml`** if that file is present.
-3. **Otherwise, downloads from OpenStreetMap** using OSMnx for the central Bengaluru bounding box and installs it at the target path.
+This script ensures `app/data/graph/bengaluru_coverage_box.graphml` is ready:
+1. **Uses the existing target graph** at `app/data/graph/bengaluru_coverage_box.graphml` if already present and non-empty.
+2. **Otherwise, copies `phase0/output/bengaluru_coverage_box.graphml`** if that file is present.
+3. **Otherwise, downloads from OpenStreetMap** using OSMnx for the expanded Bengaluru coverage box (`west=77.52, south=12.90, east=77.68, north=13.04`) and installs it at the target path.
 
 To force a fresh download directly from OpenStreetMap:
 ```bash
@@ -279,8 +279,10 @@ Proposal details and approval status for P1, P2 and P10 (ranking) and for P3, P4
 
 ## Known Limitations
 
-1. **Active Road Graph Coverage**: The application currently loads `app/data/graph/bengaluru_small_full.graphml` (6.47 MB), which covers central Bengaluru and contains only H01 and H02 of the 37 demo hospitals. The expanded coverage box numbers (23 hospitals, 72,040 nodes, 187,464 edges, 68.52 MB, 1,577.4 MB peak memory) were measured on `phase0/output/bengaluru_coverage_box.graphml`, which the application does not load yet. Any coordinates outside the loaded graph coverage return an `OUT_OF_COVERAGE` contract error. For `POST /recommend-hospital` this means only H01 and H02 can ever be recommended, and the other hospitals are skipped without any warning (P7).
-2. **Demo Clock**: With the default `AIDFLOW_TIME_MODE=real`, every demo hospital counts as stale because the dataset is dated 2026-10-31, so ranking ignores bed counts and every response carries `STALE_HOSPITAL_DATA`. Run with `AIDFLOW_TIME_MODE=demo` for demonstrations.
-3. **Request Speed Not Measured**: `POST /recommend-hospital` routes to every eligible hospital on each request. Its response time has not been measured, and it may be slower on the larger graph.
+1. **Active Road Graph Coverage**: The application loads the larger measured Bengaluru road graph (`app/data/graph/bengaluru_coverage_box.graphml`, 68.52 MB), which covers 23 of the 37 demo hospitals. The remaining 14 demo hospitals (H16, H18, H19, H21, H22, H23, H26, H28, H30, H31, H33, H35, H36, H37) lie outside the graph boundary. Any pickup coordinates outside this coverage area return an `OUT_OF_COVERAGE` contract error (422), and hospitals outside coverage are skipped during routing (or return `NO_ROUTE_FOUND` if only those hospitals are requested).
+2. **Server Startup Preload and Request Performance**: Measured on the startup-preloaded version (`app/data/graph/bengaluru_coverage_box.graphml`, 72,040 nodes, 187,464 edges):
+   - **Startup preload (graph load)**: 23.14 seconds to load the road graph into memory at server startup (~1,363 MB peak memory, ~570 MB resident memory).
+   - **Request time (post-startup)**: Once the graph is preloaded at startup, requests do not pay the graph-load delay. Across tested pickup points, requests had a median of 611 ms with a range of 276–1,022 ms.
+3. **Demo Clock**: With the default `AIDFLOW_TIME_MODE=real`, every demo hospital counts as stale because the dataset is dated 2026-10-31, so ranking ignores bed counts and every response carries `STALE_HOSPITAL_DATA`. Run with `AIDFLOW_TIME_MODE=demo` for demonstrations.
 4. **No Live Traffic**: ETAs are calculated assuming a constant nominal urban ambulance speed (default: 30 km/h) without dynamic traffic congestion data.
 5. **Demo Data**: Hospital bed availability, specialty sets, and facility operational statuses are simulated values.

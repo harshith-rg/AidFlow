@@ -1,6 +1,6 @@
 """Setup script: downloads or installs the Bengaluru road network graph.
 
-Ensures that app/data/graph/bengaluru_small_full.graphml exists and is valid
+Ensures that app/data/graph/bengaluru_coverage_box.graphml exists and is valid
 so the service, routing engine, and agreement tests can run immediately.
 """
 
@@ -16,19 +16,19 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 TARGET_GRAPH_FILE = (
-    PROJECT_ROOT / "app" / "data" / "graph" / "bengaluru_small_full.graphml"
+    PROJECT_ROOT / "app" / "data" / "graph" / "bengaluru_coverage_box.graphml"
 )
 PHASE0_GRAPH_FILE = (
-    PROJECT_ROOT / "phase0" / "output" / "bengaluru_small_full.graphml"
+    PROJECT_ROOT / "phase0" / "output" / "bengaluru_coverage_box.graphml"
 )
 CACHE_DIR = PROJECT_ROOT / "phase0" / "cache"
 
-# Default central Bengaluru bounding box
+# Expanded Bengaluru coverage box (covering 23 of 37 demo hospitals, measured in Phase 0)
 DEFAULT_BBOX = {
-    "west": 77.56,
-    "south": 12.96,
-    "east": 77.62,
-    "north": 13.00,
+    "west": 77.52,
+    "south": 12.90,
+    "east": 77.68,
+    "north": 13.04,
 }
 
 
