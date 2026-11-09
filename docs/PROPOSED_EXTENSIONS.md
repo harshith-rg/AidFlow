@@ -10,12 +10,12 @@ CONTRACT.md stays authoritative and unchanged. Every item below is only a propos
 | E4 | `reference_time_mode` and `reference_time` in `assumptions` | Hema, Chitte | Proposed |
 | P1 | Stale tie-break "group rule" | Whole team | Pending approval (provisionally implemented, see notes below) |
 | P2 | Rank on unrounded ETA, round only for display | Whole team | Pending approval (current implementation provisionally ranks on rounded `eta_min`, see notes below) |
-| P3 | `STALE_HOSPITAL_DATA` only for stale hospitals shown in the response, with the hospital ID | Hema, Chitte | Proposed |
-| P4 | `candidate_hospital_ids: null` means all hospitals; unknown ID gives `INVALID_REQUEST` | Hema | Proposed |
+| P3 | `STALE_HOSPITAL_DATA` only for stale hospitals shown in the response, with the hospital ID | Hema, Chitte | Pending approval (provisionally implemented in Phase 5 without the hospital ID, see notes below) |
+| P4 | `candidate_hospital_ids: null` means all hospitals; unknown ID gives `INVALID_REQUEST` | Hema | Pending approval (provisionally implemented in Phase 5, see notes below) |
 | P5 | `OUT_OF_COVERAGE` also when origin is about 500 m or more from any road | All | Proposed |
 | P6 | Polyline starts/ends at exact pickup and hospital points; distance counts road edges only | Chitte, Bindu | Proposed |
-| P7 | Hospital outside the graph is skipped with a new warning code | Hema, Chitte | Proposed |
-| P8 | Any problem inside `origin` gives `INVALID_COORDINATES`; everything else `INVALID_REQUEST` | Hema | Proposed (not implemented) |
+| P7 | Hospital outside the graph is skipped with a new warning code | Hema, Chitte | Pending approval (skipping is provisionally implemented in Phase 5; the new warning code is not, see notes below) |
+| P8 | Any problem inside `origin` gives `INVALID_COORDINATES`; everything else `INVALID_REQUEST` | Hema | Pending approval (provisionally implemented in Phase 5, see notes below) |
 | P9 | New codes `NOT_FOUND` (404) and `METHOD_NOT_ALLOWED` (405) | Whole team | Proposed (implemented as harmless extras) |
 | P10 | Final deterministic tie-break on `hospital_id` when ETA, beds and name all tie | Whole team | Pending approval (provisionally implemented in Phase 4) |
 
@@ -28,6 +28,23 @@ Confirmed in Phase 1 (not extensions): malformed JSON gives `INVALID_REQUEST`, H
 **P2 (pending approval).** The proposal is to rank on the unrounded ETA and round only for display. CONTRACT.md section 8 says "sort by `eta_min`", which is the rounded field, so `hospital_ranking.py` currently ranks on the rounded `eta_min` as a provisional literal reading (`EtaBasis.ROUNDED`, the default). `EtaBasis.UNROUNDED` is also implemented and needs `raw_eta_min`. `distance_eta.py` keeps `raw_eta_min` on its result so that the unrounded option stays available if the team approves it. Switching is a change to the default basis in `hospital_ranking.py` plus the ranking tests that pin the rounded behaviour.
 
 **P10 (pending approval): deterministic tie-break.** CONTRACT.md section 8, step 5 requires that the same input always gives the same output. The contract does not say which field breaks a complete tie, so the implementation uses `hospital_id` as the final key. The full sort key is: ETA, freshness group (fresh before stale), beds descending (0 for stale), name ignoring case, name exactly, `hospital_id`. Two candidates with the same `hospital_id` in one ranking call are rejected with a `ValueError`. The name comparison (ignoring case first, then exact) is an implementation detail so that "alpha" and "Alpha" always sort the same way.
+
+## Phase 5 notes on the endpoint proposals
+
+`POST /recommend-hospital` (`app/api/routes.py`) already behaves as described below. None of these four items is in CONTRACT.md or approved yet, so each may change. Tests pin the current behaviour in `tests/test_recommend_hospital.py`; update them if the team decides differently.
+
+**P3 (pending approval, partly implemented).** The `STALE_HOSPITAL_DATA` warning is added only when the recommended hospital or one of the shown alternatives has stale bed data; stale hospitals that are not shown do not trigger it. The proposal also asks for the hospital ID in the warning. That part is **not implemented**: the warning has a code and a message only, so the caller must read `bed_data_stale` on each hospital to see which one is stale.
+
+**P4 (pending approval).** `candidate_hospital_ids` set to `null` or omitted means all hospitals. An ID that is not in the dataset returns `INVALID_REQUEST` (HTTP 400). Duplicate IDs are removed. An empty list returns `NO_ELIGIBLE_HOSPITAL` (HTTP 422). IDs are checked before the road graph is loaded.
+
+**P7 (pending approval, partly implemented).** A hospital whose location is outside the loaded road graph, or that has no road route from the pickup point, is skipped and the remaining hospitals are ranked. If none remain, the response is `NO_ROUTE_FOUND`. The proposed new warning code is **not implemented**, so a skipped hospital is invisible to the caller. This matters with the active 6.47 MB graph, which contains only H01 and H02 of the 37 demo hospitals: the other 35 are always skipped without notice. A decision on the warning code and on which graph to load should be made together.
+
+**P8 (pending approval).** Any problem with `origin` returns `INVALID_COORDINATES` (HTTP 400): origin missing, null or not an object; `lat` or `lng` missing, null, not a number, a numeric string or a boolean; or a value out of range. Every other missing or wrong-typed field returns `INVALID_REQUEST` (HTTP 400). `max_alternatives` is strict as well: only an integer from 0 to 5 is accepted (a string, float or boolean is rejected), and `null` means the default of 2.
+
+**Related Phase 5 behaviour (no proposal needed).**
+- `generated_at` is always the real current UTC time, in both clock modes. The clock mode only decides whether bed data counts as stale.
+- With the default `AIDFLOW_TIME_MODE=real`, all demo hospitals are stale because the dataset is dated 2026-10-31T14:30Z. With `AIDFLOW_TIME_MODE=demo` the dataset's own `as_of` time is the reference, so the demo hospitals are fresh. The response does not report the mode; that is proposal E4.
+- Request fields are validated before the road graph is loaded. The pickup point is snapped to the road after that, so `OUT_OF_COVERAGE` can only appear for an otherwise valid request.
 
 ## Phase 4 implementation decisions (inside CONTRACT.md section 9, not changes to it)
 
