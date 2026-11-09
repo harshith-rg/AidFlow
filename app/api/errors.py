@@ -64,32 +64,50 @@ async def handle_validation_error(
     """Bad input (missing fields, wrong types, malformed JSON) -> 400.
 
     FastAPI normally answers 422 in its own format. The contract says 400
-    and its own shape, so we translate.
-
-    NOTE (P8, still PROPOSED): for now every input problem is INVALID_REQUEST.
-    Whether coordinate problems become INVALID_COORDINATES is decided in
-    Phase 5, after Hema confirms.
+    and its own shape, so we translate:
+    - CONTRACT.md section 6: origin missing, not numeric, or out of range
+      yields INVALID_COORDINATES.
+    - Other missing or wrong-typed fields yield INVALID_REQUEST.
     """
     problems = []
     is_bad_json = False
+    has_origin_error = False
+
     for err in exc.errors():
         if err.get("type") == "json_invalid":
             is_bad_json = True
+        loc = [str(part) for part in err.get("loc", ())]
+        if "origin" in loc or "origin_lat" in loc or "origin_lng" in loc:
+            has_origin_error = True
         problems.append(
             {
-                "location": [str(part) for part in err.get("loc", ())],
+                "location": loc,
                 "problem": str(err.get("msg", "")),
                 "type": str(err.get("type", "")),
             }
         )
 
-    message = (
-        "Request body is not valid JSON."
-        if is_bad_json
-        else "The request has missing or invalid fields."
-    )
+    if is_bad_json:
+        return build_error_response(
+            ErrorCode.INVALID_REQUEST,
+            "Request body is not valid JSON.",
+            400,
+            {"problems": problems},
+        )
+
+    if has_origin_error:
+        return build_error_response(
+            ErrorCode.INVALID_COORDINATES,
+            "Origin coordinates are missing, not numeric, or invalid.",
+            400,
+            {"problems": problems},
+        )
+
     return build_error_response(
-        ErrorCode.INVALID_REQUEST, message, 400, {"problems": problems}
+        ErrorCode.INVALID_REQUEST,
+        "The request has missing or invalid fields.",
+        400,
+        {"problems": problems},
     )
 
 
