@@ -293,7 +293,8 @@
   function fitShown() {
     if (!map || !state.shown) return;
     var pts = state.shown.route.polyline;
-    if (pts && pts.length) map.fitBounds(L.latLngBounds(pts), { padding: [40, 40] });
+    if (pts && pts.length > 1) map.fitBounds(L.latLngBounds(pts), { padding: [40, 40] });
+    else if (pts && pts.length === 1) map.setView(pts[0], Math.max(map.getZoom(), 15));
   }
   function toggleTheater() {
     if (window.matchMedia && matchMedia("(max-width: 1023.98px)").matches) return; // compact layouts use the Map tab
@@ -313,15 +314,23 @@
 
   function drawRoute(shown) {
     stopPreview(true);
+    // Always start from a clean state, so a previous route or preview never stays on screen.
+    $("#preview-hud").hidden = true;
+    $("#fit-route-btn").disabled = true;
     if (!map) return;
     layers.route.clearLayers(); layers.preview.clearLayers();
     Object.keys(markers).forEach(function (id) { markers[id].setIcon(mkIcon("mk-h", "+", 22)); });
-    var pts = shown.route.polyline;
-    if (!pts || pts.length < 2) return;
+    var pts = shown.route.polyline || [];
+    var hp = state.hospById[shown.hospitalId];
+    var end = pts.length ? pts[pts.length - 1] : (hp ? [hp.lat, hp.lng] : null);
+    if (end) L.marker(end, { icon: mkIcon("mk-h is-dest", "+", 30), title: shown.name, zIndexOffset: 900 }).addTo(layers.route);
+    if (pts.length < 2) {
+      // Pickup is at the hospital: no line to draw or preview, but still show where it is.
+      if (end) map.setView(end, Math.max(map.getZoom(), 15));
+      return;
+    }
     L.polyline(pts, { color: "#885CF6", weight: 11, opacity: 0.25, lineCap: "round" }).addTo(layers.route);
     L.polyline(pts, { color: "#885CF6", weight: 4, opacity: 0.95, lineCap: "round", lineJoin: "round" }).addTo(layers.route);
-    var end = pts[pts.length - 1];
-    L.marker(end, { icon: mkIcon("mk-h is-dest", "+", 30), title: shown.name, zIndexOffset: 900 }).addTo(layers.route);
     preparePreview(pts);
     $("#fit-route-btn").disabled = false;
     $("#preview-hud").hidden = false;
@@ -376,6 +385,7 @@
   }
   function playPreview() {
     if (!state.shown) return;
+    if (preview.pts.length < 2) { toast("The pickup point is at the hospital, so there is no route line to preview."); return; }
     if (motionOff()) { setProgress(1); toast("Animation is off, so the whole route is shown."); return; }
     if (preview.t >= 1) setProgress(0);
     preview.playing = true; setPlayIcon(true);
@@ -416,6 +426,7 @@
     api("POST", "/recommend-hospital", body).then(function (data) {
       if (myId !== state.requestId) return;
       state.result = data;
+      state.resultOrigin = { lat: body.origin.lat, lng: body.origin.lng }; // pickup this result was calculated for
       state.resultKind = opts.candidate ? "single" : "recommend";
       state.shown = shownFrom(data.recommended, data.route);
       renderResult("ok");
@@ -432,12 +443,12 @@
   function shownFrom(hosp, route) { return { hospitalId: hosp.hospital_id, name: hosp.name, route: route }; }
 
   function viewAlternative(id) {
-    if (state.loading || !state.origin) return;
+    if (state.loading || !state.result || !state.resultOrigin) return;
     if (state.shown && state.shown.hospitalId === id) { playPreviewIfShown(); return; }
     var alt = state.result.alternatives.filter(function (a) { return a.hospital_id === id; })[0];
     var myId = ++state.requestId;
     setLoading(true);
-    api("POST", "/recommend-hospital", { origin: { lat: state.origin.lat, lng: state.origin.lng }, needs: [], max_alternatives: 0, candidate_hospital_ids: [id] })
+    api("POST", "/recommend-hospital", { origin: { lat: state.resultOrigin.lat, lng: state.resultOrigin.lng }, needs: [], max_alternatives: 0, candidate_hospital_ids: [id] })
       .then(function (data) {
         if (myId !== state.requestId) return;
         state.shown = shownFrom(alt || data.recommended, data.route);
@@ -537,7 +548,7 @@
     var a = r.assumptions || {};
     box.append(h("p", { class: "assume" },
       "ETA = road distance ÷ assumed average speed (" + a.average_speed_kmh + " km/h). Live traffic: " + (a.live_traffic ? "yes" : "no") +
-      ". Routing: " + String(a.routing_algorithm).toUpperCase() + ". Hospital data: " + a.hospital_data + ". Generated " + r.generated_at + "."));
+      ". Routing: " + String(a.routing_algorithm).toUpperCase() + ". Hospital data: " + a.hospital_data + ". Pickup used: " + fmt(state.resultOrigin.lat, 5) + ", " + fmt(state.resultOrigin.lng, 5) + ". Generated " + r.generated_at + "."));
   }
 
   function resultJson() { return JSON.stringify(state.result, null, 2); }
@@ -566,7 +577,7 @@
 
   function resetAll() {
     state.requestId++; setLoading(false);
-    state.origin = null; state.needs = {}; state.result = null;
+    state.origin = null; state.needs = {}; state.result = null; state.resultOrigin = null;
     clearRoute();
     if (originMarker && map) { map.removeLayer(originMarker); originMarker = null; }
     $("#lat-input").value = ""; $("#lng-input").value = "";
