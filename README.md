@@ -229,6 +229,18 @@ The response does not yet say which clock mode was used (proposal E4).
 
 ---
 
+## Browser UI
+
+Open <http://127.0.0.1:8000/> after the service has started (the first page load does not need the road graph; routing does). The UI is plain HTML, CSS and JavaScript in `app/static/` and is served by the same FastAPI app, so there is no build step. Leaflet and the map tiles load from the internet.
+
+- **Recommend:** choose a pickup (landmark button, latitude/longitude, click or drag the pin on the map), tick the needs, and press "Find hospital & route". It shows the recommended hospital, the alternatives, the warnings, and draws the returned route on the map. Click an alternative to see its route.
+- **Route preview:** moves a marker along the returned `route.polyline` with play, pause, replay, a position slider and a speed button. It is a simulation of the route, **not** a vehicle position, and nothing is dispatched. "Reduce motion" (or the operating-system setting) skips the animation and shows the whole route.
+- **Hospitals:** search, filter by specialty, sort, and open details for the demo hospitals inside the loaded map coverage. "Estimate route from pickup" uses `POST /recommend-hospital` with `candidate_hospital_ids`.
+- **Overview:** counts and specialty coverage from the hospital list, and the latest recommendation.
+- Light and dark mode (follows the system at first, then remembers your choice), a responsive layout for phones and laptops, and a "DEMO DATA" and "Estimated ETA, live traffic not used" notice that is always visible.
+
+The UI calls only `GET /health`, `GET /api/demo/hospitals` and `POST /recommend-hospital`. Hospital status, last-update time and the hospitals outside the map coverage are not shown, because no endpoint returns them (proposals E2 and E3 in `docs/PROPOSED_EXTENSIONS.md`). `tests/test_ui.py` checks the page is served, keeps its labels, and uses only those endpoints.
+
 ## Running the Tests
 
 The test suite runs entirely offline using synthetic graph fixtures and does not require an internet connection. The one exception is a routing-agreement test that needs the real Bengaluru graph file; it is skipped automatically when that file is not present.
@@ -265,7 +277,7 @@ Test coverage includes:
 | **Phase 3** | Routing engine (snapping, custom A\*, custom Dijkstra, agreement tests, demo map & API) | **Completed** |
 | **Phase 4** | Road-distance ETA calculation, hospital ranking and reason sentences (ranking rules P1/P2/P10 provisional) | **Completed** |
 | **Phase 5** | Production API endpoint (`POST /recommend-hospital`); P3, P4, P7 and P8 behaviours provisional, team integration still to do | **Endpoint completed** (merged to `main`) |
-| **Phase 6** | Frontend & UI integration | *Not Started* |
+| **Phase 6** | Frontend & UI integration | **UI built, in review** (Recommend, Hospitals, Overview, map and route preview) |
 | **Phase 7** | System polish, performance tuning | *Not Started* |
 | **Phase 8** | Final documentation and multi-member integration | *Not Started* |
 
