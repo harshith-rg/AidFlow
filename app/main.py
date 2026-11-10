@@ -7,8 +7,11 @@ import logging
 import time
 from contextlib import asynccontextmanager
 
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.api.errors import register_error_handlers
 from app.api.routes import router
@@ -18,6 +21,8 @@ from app.services.graph_loader import GraphError, get_road_graph
 # Uvicorn's own logger, so the startup messages are visible in the console while the
 # graph loads (the default "aidflow.*" loggers print nothing below WARNING).
 logger = logging.getLogger("uvicorn.error")
+
+STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 # Addresses where the React demo UI will run during local development.
 ALLOWED_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"]
@@ -81,6 +86,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     register_error_handlers(app)
     app.include_router(router)
+    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
     return app
 
 
