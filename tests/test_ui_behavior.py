@@ -75,6 +75,13 @@ class FakeApi:
 
     def __init__(self):
         self.recommend_bodies: list[dict] = []
+        self.hospitals = list(HOSPITALS)  # what /api/demo/hospitals returns
+        self.hospitals_fail = False
+        self.no_alternatives = False
+        self.bad_json = False  # next /recommend-hospital reply is not JSON
+        self.fail_candidate_once = False  # next single-hospital request returns 500
+        self.hold = None  # "alt" or "any": keep matching requests pending until released
+        self.held = None  # the held Playwright route
 
     def recommend(self, body: dict) -> dict:
         self.recommend_bodies.append(body)
@@ -90,7 +97,7 @@ class FakeApi:
         recommended = _hospital_reply(hid, hosp["name"], distance, round(distance * 2, 1), "Nearest open hospital (test).")
         recommended["location"] = {"lat": hosp["lat"], "lng": hosp["lng"]}
         alternatives = []
-        if not candidate and body.get("max_alternatives", 0) > 0:
+        if not candidate and body.get("max_alternatives", 0) > 0 and not self.no_alternatives:
             alternatives = [_hospital_reply("H2", "Demo Two", 3.0, 6.0, "Open, 2.0 min slower than recommended.")]
         return {
             "recommended": recommended, "alternatives": alternatives,
@@ -128,9 +135,22 @@ def page():
                 if path == "/health":
                     return route.fulfill(json={"status": "ok"})
                 if path == "/api/demo/hospitals":
-                    return route.fulfill(json={"hospitals": HOSPITALS})
+                    if api.hospitals_fail:
+                        return route.fulfill(status=500, json={"error": {"code": "INTERNAL_ERROR", "message": "Road graph file not found.", "details": {}}})
+                    return route.fulfill(json={"hospitals": api.hospitals})
                 if path == "/recommend-hospital":
-                    return route.fulfill(json=api.recommend(json.loads(route.request.post_data)))
+                    body = json.loads(route.request.post_data)
+                    single = bool(body.get("candidate_hospital_ids"))
+                    if api.bad_json:
+                        return route.fulfill(status=200, body="<html>oops</html>", content_type="text/html")
+                    if single and api.fail_candidate_once:
+                        api.fail_candidate_once = False
+                        api.recommend_bodies.append(body)
+                        return route.fulfill(status=500, json={"error": {"code": "INTERNAL_ERROR", "message": "boom", "details": {}}})
+                    if api.hold == "any" or (api.hold == "alt" and single):
+                        api.held = (route, api.recommend(body))
+                        return None  # leave the request pending; the test decides when it ends
+                    return route.fulfill(json=api.recommend(body))
                 return route.fulfill(status=404, json={"error": {"code": "NOT_FOUND", "message": "x", "details": {}}})
             if "leaflet.js" in url:
                 return route.fulfill(body=FAKE_LEAFLET, content_type="text/javascript")
@@ -221,3 +241,105 @@ def test_alternative_still_works_when_pickup_is_unchanged(page):
     page.click(".alt-card >> nth=0")
     page.wait_for_selector(".alt-card[aria-pressed=true]")
     assert page.api.recommend_bodies[-1]["origin"] == PICKUP_A
+
+
+# ----------------------------------------------------------- Phase 7 polish
+
+
+def test_alternative_shows_busy_state_while_its_route_loads(page):
+    _ask(page)
+    page.api.hold = "alt"
+    page.click(".alt-card >> nth=0")
+    page.wait_for_selector(".alt-card[aria-busy=true]")
+    assert page.is_disabled(".alt-card >> nth=0"), "cards are locked while a route is loading"
+    assert "LOADING ROUTE" in page.inner_text(".alt-card[aria-busy=true]")
+    route, reply = page.api.held
+    route.fulfill(json=reply)
+    page.wait_for_selector(".alt-card[aria-pressed=true]")
+    assert page.is_enabled(".alt-card >> nth=0")
+    assert "Est. " in page.inner_text(".alt-card >> nth=0"), "alternative ETA is labelled as an estimate"
+
+
+def test_request_that_never_answers_times_out_and_offers_retry(page):
+    page.evaluate("window.AIDFLOW_API_TIMEOUT_MS = 300")
+    page.api.hold = "any"
+    page.click("#presets .pill >> nth=0")
+    page.click("#submit-btn")
+    page.wait_for_selector(".error-box:has-text('TIMEOUT')")
+    assert "took too long" in page.inner_text(".error-box")
+    assert page.is_enabled("#submit-btn"), "the form must be usable again after a timeout"
+    assert page.is_visible(".error-box >> text=Try again")
+
+
+def test_unreadable_reply_is_reported_not_swallowed(page):
+    page.api.bad_json = True
+    page.click("#presets .pill >> nth=0")
+    page.click("#submit-btn")
+    page.wait_for_selector(".error-box:has-text('BAD_RESPONSE')")
+    assert page.is_enabled("#submit-btn")
+
+
+def test_try_again_repeats_the_single_hospital_request(page):
+    page.click("#presets .pill >> nth=0")
+    page.api.fail_candidate_once = True
+    page.click(".nav-item[data-view=hospitals]")
+    page.click(".hosp >> nth=1")  # H2
+    page.click("text=Estimate route from pickup")
+    page.wait_for_selector(".error-box:has-text('INTERNAL_ERROR')")
+    page.click(".error-box >> text=Try again")
+    page.wait_for_selector("#result-body .card.rec")
+    last = page.api.recommend_bodies[-1]
+    assert last["candidate_hospital_ids"] == ["H2"], "retry must repeat the single-hospital request"
+    assert "route to selected hospital" in page.inner_text("#result-body").lower()
+
+
+def test_missing_alternatives_are_explained(page):
+    page.api.no_alternatives = True
+    _ask(page)
+    assert "No alternative hospital was found" in page.inner_text("#result-body")
+
+
+def test_empty_hospital_list_has_its_own_message(page):
+    page.api.hospitals = []
+    page.click(".nav-item[data-view=hospitals]")
+    page.click("#hosp-refresh")
+    page.wait_for_selector("text=No demo hospitals are inside the loaded map coverage")
+    assert page.locator("text=Reset filters").count() == 1  # only the toolbar button, not an empty-state one
+    page.click(".nav-item[data-view=overview]")
+    assert "No hospitals are inside the loaded map coverage" in page.inner_text("#overview-body")
+
+
+def test_hospital_list_failure_is_visible_on_every_page(page):
+    page.api.hospitals_fail = True
+    page.click(".nav-item[data-view=overview]")
+    page.click("#ov-refresh")
+    page.wait_for_selector("#overview-body .error-box")
+    assert "Unavailable" in page.inner_text("#overview-body")
+    assert "Loading" not in page.inner_text("#overview-body"), "must not show Loading… after a failure"
+    page.click(".nav-item[data-view=recommend]")
+    assert page.is_visible("#map-note")
+    page.api.hospitals_fail = False
+    page.click("#map-note >> text=Retry")
+    page.wait_for_selector("#map-note", state="hidden")
+
+
+def test_demo_labels_stay_visible_on_every_page(page):
+    for view in ("recommend", "hospitals", "overview"):
+        page.click(f".nav-item[data-view={view}]")
+        assert page.is_visible("text=DEMO DATA >> nth=0"), view
+    # the status bar keeps the label in view while the page scrolls
+    page.click(".nav-item[data-view=recommend]")
+    page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+    box = page.locator(".statusbar").bounding_box()
+    assert box["y"] + box["height"] <= 800 + 1 and box["y"] >= 0
+    assert "DEMO DATA" in page.inner_text(".statusbar")
+    assert "DEMO DATA" in page.inner_text(".map-badge")
+
+
+def test_no_sideways_scroll_on_the_smallest_phone(page):
+    page.set_viewport_size({"width": 320, "height": 640})
+    _ask(page)  # result with an alternative card ("Est. ... min · ... km")
+    overflow = page.evaluate("document.documentElement.scrollWidth - document.documentElement.clientWidth")
+    assert overflow <= 0, f"page is {overflow}px wider than the screen"
+    page.click(".tab[data-tab=map]")
+    assert page.evaluate("document.documentElement.scrollWidth - document.documentElement.clientWidth") <= 0

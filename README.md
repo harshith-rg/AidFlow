@@ -239,6 +239,8 @@ Open <http://127.0.0.1:8000/> after the service has started (the first page load
 - **Overview:** counts and specialty coverage from the hospital list, and the latest recommendation.
 - Light and dark mode (follows the system at first, then remembers your choice), a responsive layout for phones and laptops, and a "DEMO DATA" and "Estimated ETA, live traffic not used" notice that is always visible.
 
+**Phase 7 polish (states and labels):** every request has a loading state, a 45-second timeout and a retry that repeats the same request. Empty results, a missing hospital list, an unreadable reply and "no alternatives found" each have their own message. "DEMO DATA" and "Estimated ETA, no live traffic" stay visible: the status bar is pinned to the bottom of the window, and the map, Hospitals and Overview pages carry their own badge. The layout was checked from 320 px to 1440 px wide with no sideways scrolling.
+
 The UI calls only `GET /health`, `GET /api/demo/hospitals` and `POST /recommend-hospital`. Hospital status, last-update time and the hospitals outside the map coverage are not shown, because no endpoint returns them (proposals E2 and E3 in `docs/PROPOSED_EXTENSIONS.md`). `tests/test_ui.py` checks the page is served, keeps its labels, and uses only those endpoints.
 
 ## Running the Tests
@@ -278,7 +280,7 @@ Test coverage includes:
 | **Phase 4** | Road-distance ETA calculation, hospital ranking and reason sentences (ranking rules P1/P2/P10 provisional) | **Completed** |
 | **Phase 5** | Production API endpoint (`POST /recommend-hospital`); P3, P4, P7 and P8 behaviours provisional, team integration still to do | **Endpoint completed** (merged to `main`) |
 | **Phase 6** | Frontend & UI integration | **UI built, in review** (Recommend, Hospitals, Overview, map and route preview) |
-| **Phase 7** | System polish, performance tuning | *Not Started* |
+| **Phase 7** | Loading, empty and error states, responsive layout, DEMO DATA / Estimated ETA labels | **Done, in review** |
 | **Phase 8** | Final documentation and multi-member integration | *Not Started* |
 
 ---
