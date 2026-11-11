@@ -73,8 +73,11 @@
     NO_ELIGIBLE_HOSPITAL: "No demo hospital matches all the selected needs. Remove a need and try again.",
     NO_ROUTE_FOUND: "No road route could be found to any eligible hospital from this pickup point.",
     INTERNAL_ERROR: "The service had a problem. If the road map is missing, run: python scripts/setup_graph.py",
-    NETWORK: "Could not reach the AidFlow service. Check that it is running, then try again."
+    NETWORK: "Could not reach the AidFlow service. Check that it is running, then try again.",
+    TIMEOUT: "The service took too long to answer. Please try again in a moment.",
+    BAD_RESPONSE: "The service sent a reply this page could not read. Please try again."
   };
+  var API_TIMEOUT_MS = 45000; // tests may set window.AIDFLOW_API_TIMEOUT_MS to a smaller value
 
   var state = {
     hospitals: [], hospById: {}, hospStatus: "idle", hospError: null,
@@ -88,22 +91,34 @@
     var t0 = performance.now();
     var opts = { method: method };
     if (body) { opts.headers = { "Content-Type": "application/json" }; opts.body = JSON.stringify(body); }
+    var ctrl = window.AbortController ? new AbortController() : null;
+    var timedOut = false, timer = null;
+    if (ctrl) {
+      opts.signal = ctrl.signal;
+      timer = setTimeout(function () { timedOut = true; ctrl.abort(); }, window.AIDFLOW_API_TIMEOUT_MS || API_TIMEOUT_MS);
+    }
+    function fail(code, status) {
+      clearTimeout(timer);
+      state.lastCall = { method: method, path: path, status: status || 0, ms: performance.now() - t0 };
+      renderStatusbar();
+      return { code: code, message: ERROR_TEXT[code] };
+    }
     return fetch(path, opts).then(function (res) {
-      var ms = performance.now() - t0;
       return res.json().catch(function () { return null; }).then(function (data) {
-        state.lastCall = { method: method, path: path, status: res.status, ms: ms };
+        clearTimeout(timer);
+        if (timedOut) throw fail("TIMEOUT", res.status);
+        state.lastCall = { method: method, path: path, status: res.status, ms: performance.now() - t0 };
         renderStatusbar();
         if (!res.ok) {
           var e = (data && data.error) || { code: "HTTP_" + res.status, message: "Unexpected response (" + res.status + ")." };
           e.status = res.status;
           throw e;
         }
+        if (data === null) throw fail("BAD_RESPONSE", res.status);
         return data;
       });
     }, function () {
-      state.lastCall = { method: method, path: path, status: 0, ms: performance.now() - t0 };
-      renderStatusbar();
-      throw { code: "NETWORK", message: ERROR_TEXT.NETWORK };
+      throw fail(timedOut ? "TIMEOUT" : "NETWORK");
     });
   }
 
@@ -222,8 +237,8 @@
       : "No request yet.";
     var a = state.result && state.result.assumptions;
     $("#sb-assume").textContent = a
-      ? "Hospital data: DEMO · ETA: estimate at " + a.average_speed_kmh + " km/h · live traffic: " + (a.live_traffic ? "yes" : "no") + " · routing: " + String(a.routing_algorithm).toUpperCase()
-      : "Hospital data: DEMO · ETA: estimate, no live traffic";
+      ? "DEMO DATA · Estimated ETA at " + a.average_speed_kmh + " km/h · live traffic: " + (a.live_traffic ? "yes" : "no") + " · routing: " + String(a.routing_algorithm).toUpperCase()
+      : "DEMO DATA · Estimated ETA, no live traffic";
   }
 
   /* -------------------------------------------------------------------- map */
@@ -369,7 +384,8 @@
       if (preview.covered) preview.covered.setLatLngs(preview.pts.slice(0, p.idx + 1).concat([p.pos]));
     }
     $("#pv-scrub").value = String(Math.round(frac * 1000));
-    $("#pv-readout").textContent = Math.round(frac * 100) + "% of route · " + fmt(frac * preview.total / 1000, 2) + " of " + fmt(preview.total / 1000, 2) + " km along the returned route line";
+    var ro = $("#pv-readout"); clear(ro);
+    ro.append(Math.round(frac * 100) + "% of route · " + fmt(frac * preview.total / 1000, 2) + " of " + fmt(preview.total / 1000, 2) + " km", h("span", { class: "hide-sm", text: " along the returned route line" }));
   }
   function setPlayIcon(playing) {
     $("#pv-play-icon use").setAttribute("href", playing ? "#i-pause" : "#i-play");
@@ -417,6 +433,7 @@
       var lat = parseFloat($("#lat-input").value), lng = parseFloat($("#lng-input").value);
       if (!setOrigin(lat, lng, "Custom point")) { if (!$("#origin-error").textContent) showOriginError("Choose a pickup point first."); setTab("intake"); return; }
     }
+    state.lastRequest = opts; // so "Try again" repeats exactly this request
     var body = { origin: { lat: state.origin.lat, lng: state.origin.lng }, needs: opts.candidate ? [] : currentNeeds(), max_alternatives: opts.candidate ? 0 : Number($("#alt-count").value) };
     if (opts.candidate) body.candidate_hospital_ids = [opts.candidate];
     var myId = ++state.requestId;
@@ -428,6 +445,7 @@
       state.result = data;
       state.resultOrigin = { lat: body.origin.lat, lng: body.origin.lng }; // pickup this result was calculated for
       state.resultKind = opts.candidate ? "single" : "recommend";
+      state.resultAltRequested = body.max_alternatives;
       state.shown = shownFrom(data.recommended, data.route);
       renderResult("ok");
       drawRoute(state.shown);
@@ -448,14 +466,17 @@
     var alt = state.result.alternatives.filter(function (a) { return a.hospital_id === id; })[0];
     var myId = ++state.requestId;
     setLoading(true);
+    state.altLoading = id;
+    renderResult("ok");
     api("POST", "/recommend-hospital", { origin: { lat: state.resultOrigin.lat, lng: state.resultOrigin.lng }, needs: [], max_alternatives: 0, candidate_hospital_ids: [id] })
       .then(function (data) {
         if (myId !== state.requestId) return;
+        state.altLoading = null;
         state.shown = shownFrom(alt || data.recommended, data.route);
         renderResult("ok");
         drawRoute(state.shown);
         toast("Showing the route to " + state.shown.name + ".");
-      }).catch(function (err) { if (myId === state.requestId) toast((ERROR_TEXT[err.code] || err.message || "Could not load that route."), "error"); })
+      }).catch(function (err) { if (myId === state.requestId) { state.altLoading = null; renderResult("ok"); } if (myId === state.requestId) toast((ERROR_TEXT[err.code] || err.message || "Could not load that route."), "error"); })
       .then(function () { if (myId === state.requestId) setLoading(false); });
   }
   function showRecommendedAgain() {
@@ -468,6 +489,11 @@
 
   function setLoading(on) {
     state.loading = on;
+    clearTimeout(state.slowTimer);
+    if (on) state.slowTimer = setTimeout(function () {
+      var sk = $("#result-body .skeleton");
+      if (sk && !$("#slow-hint")) sk.after(h("p", { class: "hint", id: "slow-hint", text: "Still calculating… routing on the full city map can take a few seconds." }));
+    }, 6000);
     var b = $("#submit-btn");
     b.disabled = on;
     clear($("#submit-label"));
@@ -483,7 +509,7 @@
       h("code", { text: err.code || "ERROR" }),
       h("p", { text: text }),
       err.code === "INTERNAL_ERROR" && err.message ? h("p", { class: "hint", text: err.message }) : null,
-      h("button", { class: "btn btn-small", type: "button", onclick: function () { submitRecommend(); } }, "Try again"));
+      h("button", { class: "btn btn-small", type: "button", onclick: function () { submitRecommend(state.lastRequest || {}); } }, "Try again"));
   }
 
   function renderResult(kind, err) {
@@ -531,12 +557,18 @@
         ? h("button", { class: "btn btn-small", type: "button", onclick: showRecommendedAgain, style: "margin-bottom:8px" }, "Show recommended route again") : null;
       if (recBtn) box.append(recBtn);
       r.alternatives.forEach(function (a) {
-        box.append(h("button", { class: "alt-card", type: "button", "aria-pressed": String(shownId === a.hospital_id), onclick: function () { viewAlternative(a.hospital_id); } },
-          h("div", { class: "row" }, h("span", { class: "name", text: a.name }), h("span", { class: "num", text: fmt(a.eta_min, 1) + " min · " + fmt(a.distance_km, 2) + " km" })),
+        var busy = state.altLoading === a.hospital_id;
+        box.append(h("button", { class: "alt-card", type: "button", "aria-pressed": String(shownId === a.hospital_id), disabled: !!state.altLoading, "aria-busy": busy ? "true" : null, onclick: function () { viewAlternative(a.hospital_id); } },
+          h("div", { class: "row" }, h("span", { class: "name", text: a.name }), h("span", { class: "num", text: "Est. " + fmt(a.eta_min, 1) + " min · " + fmt(a.distance_km, 2) + " km" })),
           h("div", { class: "reason", text: a.reason }),
           a.bed_data_stale ? h("span", { class: "badge badge-stale", text: "BED DATA MAY BE STALE" }) : null,
-          h("span", { class: "badge badge-demo", text: shownId === a.hospital_id ? "ROUTE SHOWN ON MAP" : "VIEW ROUTE ON MAP" })));
+          h("span", { class: "badge badge-demo", text: busy ? "LOADING ROUTE…" : shownId === a.hospital_id ? "ROUTE SHOWN ON MAP" : "VIEW ROUTE ON MAP" })));
       });
+    }
+    if (!single && state.resultAltRequested > 0 && r.alternatives.length < state.resultAltRequested) {
+      box.append(h("p", { class: "hint", style: "margin:6px 0 0" }, r.alternatives.length
+        ? "Only " + r.alternatives.length + " of " + state.resultAltRequested + " requested alternatives were found."
+        : "No alternative hospital was found: no other eligible hospital with a road route from this pickup."));
     }
 
     box.append(h("div", { class: "actions" },
@@ -577,7 +609,7 @@
 
   function resetAll() {
     state.requestId++; setLoading(false);
-    state.origin = null; state.needs = {}; state.result = null; state.resultOrigin = null;
+    state.origin = null; state.needs = {}; state.result = null; state.resultOrigin = null; state.lastRequest = null; state.altLoading = null;
     clearRoute();
     if (originMarker && map) { map.removeLayer(originMarker); originMarker = null; }
     $("#lat-input").value = ""; $("#lng-input").value = "";
@@ -640,14 +672,21 @@
       state.hospById = {};
       state.hospitals.forEach(function (x) { state.hospById[x.hospital_id] = x; });
       state.hospStatus = "ok";
+      setMapNote(null);
       drawHospitalMarkers();
       if (state.result) renderResult("ok");
     }).catch(function (err) {
       state.hospStatus = "error"; state.hospError = err;
+      setMapNote("Hospital markers could not be loaded (" + (err.code || "ERROR") + "). You can still choose a pickup point and ask for a recommendation.");
     }).then(function () {
       if (state.view === "hospitals") renderHospitals();
       if (state.view === "overview") renderOverview();
     });
+  }
+  function setMapNote(msg) {
+    var box = $("#map-note"); clear(box);
+    box.hidden = !msg;
+    if (msg) box.append(msg + " ", h("button", { class: "btn btn-small", type: "button", onclick: loadHospitals }, "Retry"));
   }
   function allSpecs() {
     var s = {};
@@ -690,6 +729,14 @@
       var e = state.hospError || {};
       list.append(h("div", { class: "error-box", role: "alert", style: "grid-column:1/-1" }, h("code", { text: e.code || "ERROR" }), h("p", { text: ERROR_TEXT[e.code] || e.message || "Could not load hospitals." }),
         h("button", { class: "btn btn-small", type: "button", onclick: loadHospitals }, "Try again")));
+      return;
+    }
+    if (!state.hospitals.length) {
+      count.textContent = "";
+      list.append(h("div", { class: "state-box", style: "grid-column:1/-1" }, h("strong", { text: "No demo hospitals are inside the loaded map coverage" }),
+        "Check that the road map file matches the demo area (python scripts/setup_graph.py), then reload.",
+        h("div", null, h("button", { class: "btn btn-small", type: "button", style: "margin-top:10px", onclick: loadHospitals }, "Reload"))));
+      detail.hidden = true;
       return;
     }
     var items = filteredHospitals();
@@ -789,7 +836,8 @@
       h("dt", { text: "Live traffic" }), h("dd", { text: a.live_traffic ? "yes" : "no" }),
       h("dt", { text: "Algorithm" }), h("dd", { text: String(a.routing_algorithm).toUpperCase() })));
     box.append(h("div", { class: "two-col" },
-      h("div", { class: "panel" }, h("h3", { class: "panel-title", text: "Specialties covered" }), ok ? bars : h("p", { class: "hint", text: "Loading…" })),
+      h("div", { class: "panel" }, h("h3", { class: "panel-title", text: "Specialties covered" }),
+        ok && hs.length ? bars : h("p", { class: "hint", text: state.hospStatus === "error" ? "Unavailable: the hospital list could not be loaded." : ok ? "No hospitals are inside the loaded map coverage." : "Loading…" })),
       last,
       h("div", { class: "panel" }, h("h3", { class: "panel-title", text: "How to read this" }),
         h("p", { class: "hint", text: "All hospitals are fictional demo data. Beds and specialties are invented. ETA is road distance divided by an assumed speed, with no live traffic. Nothing here dispatches or tracks a vehicle." }))));

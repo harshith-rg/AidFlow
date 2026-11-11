@@ -148,7 +148,7 @@
         <!-- Map -->
         <section class="panel panel-map" id="panel-map" aria-label="Map">
           <div class="map-bar">
-            <div class="map-title"><svg class="icon"><use href="#i-map"/></svg><span>Bengaluru road map</span></div>
+            <div class="map-title"><svg class="icon"><use href="#i-map"/></svg><span>Bengaluru road map</span><span class="tag tag-demo map-badge">DEMO DATA · ESTIMATED ETA</span></div>
             <div class="map-actions">
               <button id="toggle-hosp-btn" class="btn btn-small" type="button" aria-pressed="true">Hospitals</button>
               <button id="fit-route-btn" class="btn btn-small" type="button" disabled>Fit route</button>
@@ -156,6 +156,7 @@
               <button id="theater-btn" class="icon-btn" type="button" aria-pressed="false" aria-label="Enlarge map" title="Enlarge map (F)"><svg class="icon" id="theater-icon"><use href="#i-expand"/></svg></button>
             </div>
           </div>
+          <p id="map-note" class="map-note" role="status" hidden></p>
           <div class="map-wrap">
             <div id="map" role="application" aria-label="Interactive map"></div>
             <div id="preview-hud" class="hud" hidden>
@@ -189,6 +190,7 @@
         <div>
           <h2 class="view-title">Hospitals</h2>
           <p id="hosp-scope" class="hint">Demo hospitals inside the loaded road-map coverage.</p>
+          <p class="view-tag"><span class="tag tag-demo">DEMO DATA — beds, ICU counts and specialties are invented</span></p>
         </div>
         <button id="hosp-refresh" class="btn btn-quiet" type="button"><svg class="icon"><use href="#i-refresh"/></svg>Reload</button>
       </div>
@@ -218,6 +220,7 @@
         <div>
           <h2 class="view-title">Overview</h2>
           <p class="hint">Summary of the demo data and the latest request.</p>
+          <p class="view-tag"><span class="tag tag-demo">DEMO DATA — not real hospital availability</span> <span class="tag tag-eta">Estimated ETA · no live traffic</span></p>
         </div>
         <button id="ov-refresh" class="btn btn-quiet" type="button"><svg class="icon"><use href="#i-refresh"/></svg>Refresh</button>
       </div>
@@ -227,8 +230,8 @@
 </div>
 
 <footer class="statusbar" aria-label="Request status">
+  <span id="sb-assume">DEMO DATA · Estimated ETA, no live traffic</span>
   <span id="sb-last">No request yet.</span>
-  <span id="sb-assume">Hospital data: DEMO · ETA: estimate, no live traffic</span>
 </footer>
 
 <div id="toasts" class="toasts" aria-live="polite" aria-atomic="false"></div>

@@ -92,6 +92,7 @@ def test_every_id_the_script_looks_up_exists_in_the_page(html, js):
     present = set(re.findall(r'\bid="([^"]+)"', html))
     # ids built from a prefix, e.g. "#view-" + name
     wanted |= {f"view-{v}" for v in ("recommend", "hospitals", "overview")}
+    wanted -= {"slow-hint"}  # created by app.js itself when a request is slow
     missing = sorted(i for i in wanted if i not in present)
     assert not missing, f"ids used by app.js but missing in index.html: {missing}"
 
@@ -129,3 +130,18 @@ def test_script_has_valid_syntax():
 def test_existing_endpoints_still_work(client):
     assert client.get("/health").json() == {"status": "ok"}
     assert client.get("/openapi.json").status_code == 200
+
+
+def test_phase7_labels_and_states_are_in_the_files(html, js):
+    css = (STATIC_DIR / "styles.css").read_text(encoding="utf-8")
+    # labels: map, Hospitals page, Overview page and a status bar that stays in view
+    assert 'class="tag tag-demo map-badge">DEMO DATA' in html
+    assert html.count("DEMO DATA —") >= 3
+    assert html.index('id="sb-assume"') < html.index('id="sb-last"')
+    assert ".statusbar { position: sticky; bottom: 0" in css
+    assert '"Est. " + fmt(a.eta_min' in js  # alternative ETA says it is an estimate
+    # states
+    for code in ("TIMEOUT", "BAD_RESPONSE", "NETWORK"):
+        assert code in js
+    assert "LOADING ROUTE" in js and "state.lastRequest" in js
+    assert "No demo hospitals are inside the loaded map coverage" in js
