@@ -9,9 +9,9 @@
 
 ## Overview
 
-AidFlow is a smart emergency ambulance response and hospital recommendation system prototype. This repository contains **Member 3 (Harshith RG)**'s module, currently implemented through **Phases 0–5: Road Routing, ETA Calculation, Hospital Ranking & the `POST /recommend-hospital` endpoint**.
+AidFlow is a smart emergency ambulance response and hospital recommendation system prototype. This repository contains **Member 3 (Harshith RG)**'s module, implemented through **Phases 0–7 (Road Routing, ETA Calculation, Hospital Ranking, `POST /recommend-hospital`, Leaflet Web UI, and Error States)**, with **Phase 8 (Documentation & Integration)** currently completed in review.
 
-Features implemented in Phases 0–5:
+Features implemented:
 - **Road network loading & cleanup**: Directed multigraph validation, parallel edge collapsing, self-loop removal, and safe heuristic factor computation stored in an immutable, memory-efficient `RoadGraph` structure.
 - **Hospital data management & filtering**: Demo hospital dataset loading, schema validation, operational status checks, emergency specialty filtering, and configurable data staleness detection.
 - **Deterministic location snapping**: Snapping GPS coordinates for patient pickup and hospital locations to the nearest road intersection node within coverage boundaries and distance limits.
@@ -24,6 +24,8 @@ Features implemented in Phases 0–5:
 - **Reason sentences**: Short display text for the recommended hospital and each alternative (`app/services/reasons.py`).
 
 - **Hospital recommendation endpoint**: `POST /recommend-hospital` filters hospitals, routes to each eligible one with A\*, then returns the best hospital, alternatives, route polyline, warnings and assumptions as specified in CONTRACT.md sections 4 to 6 (`app/api/routes.py`). See "Recommend Hospital Endpoint" below.
+- **Frontend & UI integration**: Interactive Leaflet demo web interface served at `GET /` with simulated route previews, responsive hospital lists, loading/empty/error states, and mandatory demo disclaimers.
+- **Architecture & Integration Documentation**: Algorithmic decisions, heuristic properties, and empirical benchmarks (with documented sources and measurement methods) are in [`ALGORITHM_DECISION.md`](ALGORITHM_DECISION.md); integration guides for Hema, Chitte, and Bindu with verified PowerShell `Invoke-RestMethod` calls, example Bash `curl` commands, and test evidence are in [`INTEGRATION.md`](INTEGRATION.md).
 
 *(Note: Several Phase 5 behaviours are provisional proposals awaiting team approval: P3, P4, P7 and P8. See "Recommend Hospital Endpoint" and [`docs/PROPOSED_EXTENSIONS.md`](docs/PROPOSED_EXTENSIONS.md).)*
 
@@ -152,7 +154,7 @@ Once started, the following endpoints are available:
 
 **Example call** (demo clock, see "Demo clock" below)
 
-macOS / Linux:
+macOS / Linux (example curl call):
 ```bash
 AIDFLOW_TIME_MODE=demo uvicorn app.main:app --port 8000
 
@@ -161,7 +163,7 @@ curl -s -X POST http://localhost:8000/recommend-hospital \
   -d '{"origin": {"lat": 12.9716, "lng": 77.5946}, "needs": ["ICU"]}'
 ```
 
-Windows (PowerShell):
+Windows (PowerShell, verified call):
 ```powershell
 $env:AIDFLOW_TIME_MODE = "demo"
 uvicorn app.main:app --port 8000
@@ -279,9 +281,9 @@ Test coverage includes:
 | **Phase 3** | Routing engine (snapping, custom A\*, custom Dijkstra, agreement tests, demo map & API) | **Completed** |
 | **Phase 4** | Road-distance ETA calculation, hospital ranking and reason sentences (ranking rules P1/P2/P10 provisional) | **Completed** |
 | **Phase 5** | Production API endpoint (`POST /recommend-hospital`); P3, P4, P7 and P8 behaviours provisional, team integration still to do | **Endpoint completed** (merged to `main`) |
-| **Phase 6** | Frontend & UI integration | **UI built, in review** (Recommend, Hospitals, Overview, map and route preview) |
-| **Phase 7** | Loading, empty and error states, responsive layout, DEMO DATA / Estimated ETA labels | **Done, in review** |
-| **Phase 8** | Final documentation and multi-member integration | *Not Started* |
+| **Phase 6** | Frontend & UI integration | **Completed** (merged to `main`) |
+| **Phase 7** | Loading, empty and error states, responsive layout, DEMO DATA / Estimated ETA labels | **Completed** (merged to `main`) |
+| **Phase 8** | Final documentation and multi-member integration (`ALGORITHM_DECISION.md`, `INTEGRATION.md`) | **Completed, in review** |
 
 ---
 
