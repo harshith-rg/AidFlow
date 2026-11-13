@@ -22,6 +22,7 @@ ALLOWED_CALLS = {
     ("GET", "/health"),
     ("GET", "/api/demo/hospitals"),
     ("POST", "/recommend-hospital"),
+    ("POST", "/api/demo/recommend-simulated"),
 }
 
 
@@ -145,3 +146,14 @@ def test_phase7_labels_and_states_are_in_the_files(html, js):
         assert code in js
     assert "LOADING ROUTE" in js and "state.lastRequest" in js
     assert "No demo hospitals are inside the loaded map coverage" in js
+
+
+def test_map_legend_elements_are_in_the_page(html):
+    assert 'id="map-legend"' in html
+    assert 'id="legend-toggle-btn"' in html
+    assert 'id="legend-body"' in html
+    assert "Pickup point (P)" in html
+    assert "Recommended (#1)" in html
+    assert "Alternative (#2, #3…)" in html
+    assert "Hospital (+)" in html
+    assert "Selected route" in html

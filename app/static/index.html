@@ -130,6 +130,18 @@
               <div id="needs-list" class="needs"></div>
             </fieldset>
 
+            <fieldset class="field">
+              <legend>Traffic condition <span class="tag tag-demo">SIMULATED DEMO</span></legend>
+              <p class="hint">Fictional scenarios for demonstration; live traffic is not used.</p>
+              <div id="scenario-pills" class="pill-row" role="group" aria-label="Simulated traffic scenario">
+                <button id="scen-normal" class="pill" type="button" data-scenario="normal" aria-pressed="true">Normal</button>
+                <button id="scen-moderate" class="pill" type="button" data-scenario="moderate" aria-pressed="false">Moderate</button>
+                <button id="scen-heavy" class="pill" type="button" data-scenario="heavy" aria-pressed="false">Heavy</button>
+                <button id="scen-closure" class="pill" type="button" data-scenario="closure" aria-pressed="false">Road closure</button>
+              </div>
+              <p id="scenario-desc" class="hint">Normal: Baseline travel at assumed speed (30 km/h). Live traffic not used.</p>
+            </fieldset>
+
             <div class="field inline-field">
               <label for="alt-count">Alternatives to show</label>
               <select id="alt-count">
@@ -159,6 +171,34 @@
           <p id="map-note" class="map-note" role="status" hidden></p>
           <div class="map-wrap">
             <div id="map" role="application" aria-label="Interactive map"></div>
+            <div id="map-legend" class="map-legend" aria-label="Map legend">
+              <div class="legend-header">
+                <span class="legend-title">LEGEND</span>
+                <button id="legend-toggle-btn" class="legend-toggle" type="button" aria-expanded="true" aria-controls="legend-body" title="Collapse or expand map legend">Hide</button>
+              </div>
+              <div id="legend-body" class="legend-body">
+                <div class="legend-item">
+                  <span class="legend-swatch mk mk-o">P</span>
+                  <span class="legend-label">Pickup point (P)</span>
+                </div>
+                <div class="legend-item">
+                  <span class="legend-swatch mk mk-h is-rec">★ 1</span>
+                  <span class="legend-label">Recommended (#1)</span>
+                </div>
+                <div class="legend-item">
+                  <span class="legend-swatch mk mk-h is-alt">2</span>
+                  <span class="legend-label">Alternative (#2, #3…)</span>
+                </div>
+                <div class="legend-item">
+                  <span class="legend-swatch mk mk-h">+</span>
+                  <span class="legend-label">Hospital (+)</span>
+                </div>
+                <div class="legend-item">
+                  <span class="legend-route-line" aria-hidden="true"></span>
+                  <span class="legend-label">Selected route</span>
+                </div>
+              </div>
+            </div>
             <div id="preview-hud" class="hud" hidden>
               <div class="hud-top">
                 <strong>ROUTE PREVIEW</strong>
@@ -173,7 +213,7 @@
               <div id="pv-readout" class="hud-readout" aria-live="off">0% of route</div>
             </div>
           </div>
-          <p class="map-foot">Map © OpenStreetMap contributors. The purple line is the road route returned by the service; the pin positions are approximate.</p>
+          <p class="map-foot">Map © OpenStreetMap contributors. The pink line is the road route returned by the service; the pin positions are approximate.</p>
         </section>
 
         <!-- Result -->

@@ -83,7 +83,8 @@
     hospitals: [], hospById: {}, hospStatus: "idle", hospError: null,
     origin: null, needs: {}, result: null, shown: null, loading: false, requestId: 0,
     lastCall: null, selectedHosp: null, search: "", specs: {}, sort: "name",
-    health: "checking", reduced: false, view: "recommend", showHospMarkers: true
+    health: "checking", reduced: false, view: "recommend", showHospMarkers: true,
+    scenario: "normal"
   };
 
   /* ------------------------------------------------------------------- api */
@@ -236,9 +237,13 @@
       ? "Last request: " + c.method + " " + c.path + " → " + (c.status || "no response") + " · " + Math.round(c.ms) + " ms (browser round trip)"
       : "No request yet.";
     var a = state.result && state.result.assumptions;
-    $("#sb-assume").textContent = a
-      ? "DEMO DATA · Estimated ETA at " + a.average_speed_kmh + " km/h · live traffic: " + (a.live_traffic ? "yes" : "no") + " · routing: " + String(a.routing_algorithm).toUpperCase()
-      : "DEMO DATA · Estimated ETA, no live traffic";
+    if (state.scenario && state.scenario !== "normal") {
+      $("#sb-assume").textContent = "SIMULATED TRAFFIC (" + state.scenario.toUpperCase() + ") · DEMO DATA · Live traffic not used";
+    } else {
+      $("#sb-assume").textContent = a
+        ? "DEMO DATA · Estimated ETA at " + a.average_speed_kmh + " km/h · live traffic: " + (a.live_traffic ? "yes" : "no") + " · routing: " + String(a.routing_algorithm).toUpperCase()
+        : "DEMO DATA · Estimated ETA, no live traffic";
+    }
   }
 
   /* -------------------------------------------------------------------- map */
@@ -260,6 +265,42 @@
     layers.route = L.layerGroup().addTo(map);
     layers.preview = L.layerGroup().addTo(map);
     map.on("click", function (e) { setOrigin(e.latlng.lat, e.latlng.lng, "Pin on map"); });
+    initLegend();
+  }
+  function initLegend() {
+    var btn = $("#legend-toggle-btn");
+    var body = $("#legend-body");
+    if (!btn || !body) return;
+    btn.addEventListener("click", function () {
+      var exp = btn.getAttribute("aria-expanded") === "true";
+      btn.setAttribute("aria-expanded", String(!exp));
+      btn.textContent = exp ? "Show" : "Hide";
+      body.hidden = exp;
+    });
+  }
+  function updateHospitalMarkerIcons(shownHospitalId) {
+    var recId = state.result && state.result.recommended && state.result.recommended.hospital_id;
+    var alts = (state.result && state.result.alternatives) || [];
+    var altRankMap = {};
+    alts.forEach(function (a, idx) { altRankMap[a.hospital_id] = idx + 2; });
+
+    Object.keys(markers).forEach(function (id) {
+      var m = markers[id];
+      if (!m) return;
+      var hp = state.hospById[id];
+      var name = hp ? hp.name : id;
+      if (id === recId) {
+        m.setIcon(mkIcon("mk-h is-rec", "★ 1", 30));
+        m.title = "Recommended (#1): " + name;
+      } else if (altRankMap[id]) {
+        var rank = altRankMap[id];
+        m.setIcon(mkIcon("mk-h is-alt", String(rank), 26));
+        m.title = "Alternative (#" + rank + "): " + name;
+      } else {
+        m.setIcon(mkIcon("mk-h", "+", 22));
+        m.title = name;
+      }
+    });
   }
   function drawHospitalMarkers() {
     if (!map) return;
@@ -274,6 +315,7 @@
       m.addTo(layers.hospitals);
       markers[hp.hospital_id] = m;
     });
+    if (state.result) updateHospitalMarkerIcons(state.shown && state.shown.hospitalId);
     if (!state.showHospMarkers) map.removeLayer(layers.hospitals);
   }
   function setOrigin(lat, lng, name) {
@@ -287,9 +329,12 @@
     $$("#presets .pill").forEach(function (p) { p.setAttribute("aria-pressed", String(p.dataset.name === state.origin.name)); });
     if (map) {
       if (!originMarker) {
-        originMarker = L.marker([state.origin.lat, state.origin.lng], { icon: mkIcon("mk-o", "", 24), draggable: true, title: "Pickup point (drag to move)", zIndexOffset: 1000 }).addTo(map);
+        originMarker = L.marker([state.origin.lat, state.origin.lng], { icon: mkIcon("mk-o", "P", 28), draggable: true, title: "Pickup point (P) — drag to move", zIndexOffset: 1000 }).addTo(map);
         originMarker.on("dragend", function () { var p = originMarker.getLatLng(); setOrigin(p.lat, p.lng, "Pin on map"); });
-      } else originMarker.setLatLng([state.origin.lat, state.origin.lng]);
+      } else {
+        originMarker.setLatLng([state.origin.lat, state.origin.lng]);
+        originMarker.setIcon(mkIcon("mk-o", "P", 28));
+      }
     }
     return true;
   }
@@ -334,18 +379,59 @@
     $("#fit-route-btn").disabled = true;
     if (!map) return;
     layers.route.clearLayers(); layers.preview.clearLayers();
-    Object.keys(markers).forEach(function (id) { markers[id].setIcon(mkIcon("mk-h", "+", 22)); });
+    updateHospitalMarkerIcons(shown.hospitalId);
+
     var pts = shown.route.polyline || [];
     var hp = state.hospById[shown.hospitalId];
     var end = pts.length ? pts[pts.length - 1] : (hp ? [hp.lat, hp.lng] : null);
-    if (end) L.marker(end, { icon: mkIcon("mk-h is-dest", "+", 30), title: shown.name, zIndexOffset: 900 }).addTo(layers.route);
+
+    var recId = state.result && state.result.recommended && state.result.recommended.hospital_id;
+    var alts = (state.result && state.result.alternatives) || [];
+    var destExtra = "";
+    var destLabel = "+";
+    if (shown.hospitalId === recId) {
+      destExtra = "is-rec";
+      destLabel = "★ 1";
+    } else {
+      var altIdx = -1;
+      for (var i = 0; i < alts.length; i++) {
+        if (alts[i].hospital_id === shown.hospitalId) { altIdx = i; break; }
+      }
+      if (altIdx >= 0) {
+        destExtra = "is-alt";
+        destLabel = String(altIdx + 2);
+      }
+    }
+
+    if (end) {
+      var destMarker = L.marker(end, {
+        icon: mkIcon("mk-h is-dest " + destExtra, destLabel, 34),
+        title: shown.name + (destLabel !== "+" ? " (" + (destLabel === "★ 1" ? "Recommended #1" : "Alternative #" + destLabel) + ")" : ""),
+        zIndexOffset: 950
+      }).addTo(layers.route);
+      if (hp) {
+        destMarker.bindPopup(h("div", null,
+          h("strong", { text: hp.name }), h("br"),
+          h("span", { text: hp.locality }), h("br"),
+          h("span", { text: "Demo beds: " + hp.beds_available + " · ICU: " + hp.icu_beds_available }), h("br"),
+          h("button", { class: "btn btn-small", type: "button", onclick: function () { selectHospital(hp.hospital_id); showView("hospitals"); } }, "Details")));
+      }
+    }
+
     if (pts.length < 2) {
       // Pickup is at the hospital: no line to draw or preview, but still show where it is.
       if (end) map.setView(end, Math.max(map.getZoom(), 15));
       return;
     }
-    L.polyline(pts, { color: "#885CF6", weight: 11, opacity: 0.25, lineCap: "round" }).addTo(layers.route);
-    L.polyline(pts, { color: "#885CF6", weight: 4, opacity: 0.95, lineCap: "round", lineJoin: "round" }).addTo(layers.route);
+
+    // High-contrast multi-layer route line:
+    // Layer 1: Ambient soft pink glow
+    L.polyline(pts, { color: "#FF3D8B", weight: 12, opacity: 0.25, lineCap: "round" }).addTo(layers.route);
+    // Layer 2: Deep navy casing for contrast against light or dark map tiles
+    L.polyline(pts, { color: "#0F1B3D", weight: 7, opacity: 0.9, lineCap: "round", lineJoin: "round" }).addTo(layers.route);
+    // Layer 3: Vibrant hot-pink route core
+    L.polyline(pts, { color: "#FF3D8B", weight: 4, opacity: 1.0, lineCap: "round", lineJoin: "round" }).addTo(layers.route);
+
     preparePreview(pts);
     $("#fit-route-btn").disabled = false;
     $("#preview-hud").hidden = false;
@@ -358,6 +444,7 @@
     $("#preview-hud").hidden = true;
     $("#fit-route-btn").disabled = true;
     state.shown = null;
+    updateHospitalMarkerIcons(null);
   }
   function preparePreview(pts) {
     preview.pts = pts; preview.cum = [0];
@@ -366,7 +453,7 @@
     preview.dur = Math.min(20000, Math.max(6000, preview.total / 1000 * 2500));
     preview.t = 0;
     preview.marker = L.marker(pts[0], { icon: mkIcon("mk-p", "", 18), interactive: false, zIndexOffset: 1100 }).addTo(layers.preview);
-    preview.covered = L.polyline([pts[0]], { color: "#cfbdff", weight: 4, opacity: 1, lineCap: "round" }).addTo(layers.preview);
+    preview.covered = L.polyline([pts[0]], { color: "#ffffff", weight: 4, opacity: 0.95, lineCap: "round" }).addTo(layers.preview);
   }
   function pointAt(frac) {
     var d = frac * preview.total, c = preview.cum, lo = 0, hi = c.length - 1;
@@ -434,13 +521,18 @@
       if (!setOrigin(lat, lng, "Custom point")) { if (!$("#origin-error").textContent) showOriginError("Choose a pickup point first."); setTab("intake"); return; }
     }
     state.lastRequest = opts; // so "Try again" repeats exactly this request
+    var scen = state.scenario || "normal";
     var body = { origin: { lat: state.origin.lat, lng: state.origin.lng }, needs: opts.candidate ? [] : currentNeeds(), max_alternatives: opts.candidate ? 0 : Number($("#alt-count").value) };
     if (opts.candidate) body.candidate_hospital_ids = [opts.candidate];
+    if (scen !== "normal") body.scenario = scen;
     var myId = ++state.requestId;
     setLoading(true);
     renderResult("loading");
     setTab("result");
-    api("POST", "/recommend-hospital", body).then(function (data) {
+    var reqPromise = scen === "normal"
+      ? api("POST", "/recommend-hospital", body)
+      : api("POST", "/api/demo/recommend-simulated", body);
+    reqPromise.then(function (data) {
       if (myId !== state.requestId) return;
       state.result = data;
       state.resultOrigin = { lat: body.origin.lat, lng: body.origin.lng }; // pickup this result was calculated for
@@ -458,7 +550,17 @@
       renderResult("error", err);
     }).then(function () { if (myId === state.requestId) setLoading(false); });
   }
-  function shownFrom(hosp, route) { return { hospitalId: hosp.hospital_id, name: hosp.name, route: route }; }
+  function shownFrom(hosp, route) {
+    return {
+      hospitalId: hosp.hospital_id,
+      name: hosp.name,
+      route: route,
+      distance_km: hosp.distance_km,
+      baseline_eta_min: hosp.baseline_eta_min !== undefined ? hosp.baseline_eta_min : hosp.eta_min,
+      simulated_eta_min: hosp.simulated_eta_min !== undefined ? hosp.simulated_eta_min : hosp.eta_min,
+      delay_min: hosp.delay_min || 0
+    };
+  }
 
   function viewAlternative(id) {
     if (state.loading || !state.result || !state.resultOrigin) return;
@@ -468,7 +570,13 @@
     setLoading(true);
     state.altLoading = id;
     renderResult("ok");
-    api("POST", "/recommend-hospital", { origin: { lat: state.resultOrigin.lat, lng: state.resultOrigin.lng }, needs: [], max_alternatives: 0, candidate_hospital_ids: [id] })
+    var scen = state.scenario || "normal";
+    var altBody = { origin: { lat: state.resultOrigin.lat, lng: state.resultOrigin.lng }, needs: [], max_alternatives: 0, candidate_hospital_ids: [id] };
+    if (scen !== "normal") altBody.scenario = scen;
+    var altPromise = scen === "normal"
+      ? api("POST", "/recommend-hospital", altBody)
+      : api("POST", "/api/demo/recommend-simulated", altBody);
+    altPromise
       .then(function (data) {
         if (myId !== state.requestId) return;
         state.altLoading = null;
@@ -535,16 +643,24 @@
       });
     }
 
+    var isSimulated = rec.simulated_eta_min !== undefined && rec.baseline_eta_min !== undefined;
+    var etaVal = isSimulated ? rec.simulated_eta_min : rec.eta_min;
+    var etaLabelText = isSimulated && rec.delay_min > 0
+      ? "Simulated ETA (" + fmt(rec.baseline_eta_min, 1) + "m base · +" + fmt(rec.delay_min, 1) + "m delay)"
+      : "Estimated ETA";
+    var distLabelText = isSimulated ? "Road distance (physical)" : "Road distance";
+
     var card = h("div", { class: "card rec" },
-      h("div", { class: "card-label", text: single ? "Route to selected hospital" : "Recommended" }),
+      h("div", { class: "card-label", text: single ? "Route to selected hospital" : "Recommended (#1)" }),
       h("h3", { text: rec.name }),
       h("div", { class: "sub", text: (hp ? hp.locality + " · " : "") + rec.hospital_id }),
       h("div", { class: "metrics" },
-        h("div", { class: "metric" }, h("div", { class: "v" }, fmt(rec.eta_min, 1), h("small", { text: " min" })), h("div", { class: "k", text: "Estimated ETA" })),
-        h("div", { class: "metric" }, h("div", { class: "v" }, fmt(rec.distance_km, 2), h("small", { text: " km" })), h("div", { class: "k", text: "Road distance" }))),
+        h("div", { class: "metric" }, h("div", { class: "v" }, fmt(etaVal, 1), h("small", { text: " min" })), h("div", { class: "k", text: etaLabelText })),
+        h("div", { class: "metric" }, h("div", { class: "v" }, fmt(rec.distance_km, 2), h("small", { text: " km" })), h("div", { class: "k", text: distLabelText }))),
       h("p", { class: "reason", text: rec.reason }),
       h("div", null,
         h("span", { class: "badge badge-demo", text: "DEMO DATA" }),
+        isSimulated && r.scenario ? h("span", { class: "badge badge-demo", text: "SIMULATED: " + r.scenario.name.toUpperCase() }) : null,
         rec.bed_data_stale ? h("span", { class: "badge badge-stale", text: "BED DATA MAY BE STALE" }) : null),
       hp ? h("div", { class: "cap" },
         h("div", null, h("b", { text: String(hp.icu_beds_available) }), h("span", { text: "ICU beds (demo)" })),
@@ -556,10 +672,17 @@
       var recBtn = shownId !== rec.hospital_id
         ? h("button", { class: "btn btn-small", type: "button", onclick: showRecommendedAgain, style: "margin-bottom:8px" }, "Show recommended route again") : null;
       if (recBtn) box.append(recBtn);
-      r.alternatives.forEach(function (a) {
+      r.alternatives.forEach(function (a, idx) {
         var busy = state.altLoading === a.hospital_id;
+        var altDelay = a.delay_min || 0;
+        var delaySuffix = altDelay > 0 ? " (+" + fmt(altDelay, 1) + "m)" : "";
+        var altRank = idx + 2;
         box.append(h("button", { class: "alt-card", type: "button", "aria-pressed": String(shownId === a.hospital_id), disabled: !!state.altLoading, "aria-busy": busy ? "true" : null, onclick: function () { viewAlternative(a.hospital_id); } },
-          h("div", { class: "row" }, h("span", { class: "name", text: a.name }), h("span", { class: "num", text: "Est. " + fmt(a.eta_min, 1) + " min · " + fmt(a.distance_km, 2) + " km" })),
+          h("div", { class: "row" },
+            h("span", { class: "name" },
+              h("span", { class: "alt-badge", text: "#" + altRank }),
+              a.name),
+            h("span", { class: "num", text: "Est. " + fmt(a.eta_min, 1) + " min" + delaySuffix + " · " + fmt(a.distance_km, 2) + " km" })),
           h("div", { class: "reason", text: a.reason }),
           a.bed_data_stale ? h("span", { class: "badge badge-stale", text: "BED DATA MAY BE STALE" }) : null,
           h("span", { class: "badge badge-demo", text: busy ? "LOADING ROUTE…" : shownId === a.hospital_id ? "ROUTE SHOWN ON MAP" : "VIEW ROUTE ON MAP" })));
@@ -610,6 +733,7 @@
   function resetAll() {
     state.requestId++; setLoading(false);
     state.origin = null; state.needs = {}; state.result = null; state.resultOrigin = null; state.lastRequest = null; state.altLoading = null;
+    state.scenario = "normal";
     clearRoute();
     if (originMarker && map) { map.removeLayer(originMarker); originMarker = null; }
     $("#lat-input").value = ""; $("#lng-input").value = "";
@@ -617,6 +741,9 @@
     showOriginError(null);
     $$("#presets .pill").forEach(function (p) { p.setAttribute("aria-pressed", "false"); });
     $$("#needs-list input").forEach(function (i) { i.checked = false; });
+    var scenBtns = { normal: $("#scen-normal"), moderate: $("#scen-moderate"), heavy: $("#scen-heavy"), closure: $("#scen-closure") };
+    Object.keys(scenBtns).forEach(function (k) { if (scenBtns[k]) scenBtns[k].setAttribute("aria-pressed", String(k === "normal")); });
+    if ($("#scenario-desc")) $("#scenario-desc").textContent = "Normal: Baseline travel at assumed speed (30 km/h). Live traffic not used.";
     $("#alt-count").value = "2";
     renderResult("empty"); renderStatusbar();
     toast("Cleared.");
@@ -635,6 +762,45 @@
       var cb = h("input", { type: "checkbox", value: n[0], onchange: function (e) { state.needs[n[0]] = e.target.checked; } });
       needs.append(h("label", { class: "need" }, cb, h("span", { text: n[1] }), h("code", { text: n[0] })));
     });
+
+    var SCENARIO_DESCRIPTIONS = {
+      normal: "Normal: Baseline travel at assumed speed (30 km/h). Live traffic not used.",
+      moderate: "Moderate: +60% travel time in central corridor, +20% elsewhere (simulated).",
+      heavy: "Heavy: +150% travel time in central corridor, +50% elsewhere (simulated).",
+      closure: "Road closure: Key corridor link blocked, forcing detour routing (simulated)."
+    };
+    function setScenario(scen) {
+      state.scenario = scen;
+      var btns = {
+        normal: $("#scen-normal"),
+        moderate: $("#scen-moderate"),
+        heavy: $("#scen-heavy"),
+        closure: $("#scen-closure")
+      };
+      Object.keys(btns).forEach(function (k) {
+        if (btns[k]) btns[k].setAttribute("aria-pressed", String(k === scen));
+      });
+      if ($("#scenario-desc")) $("#scenario-desc").textContent = SCENARIO_DESCRIPTIONS[scen] || "";
+      if (state.resultOrigin && state.origin && !state.loading) {
+        toast("Recalculating route under " + scen + " scenario…");
+        submitRecommend(state.lastRequest || {});
+      }
+    }
+    var scenList = [
+      ["normal", $("#scen-normal")],
+      ["moderate", $("#scen-moderate")],
+      ["heavy", $("#scen-heavy")],
+      ["closure", $("#scen-closure")]
+    ];
+    scenList.forEach(function (pair) {
+      if (pair[1]) {
+        pair[1].addEventListener("click", function () {
+          setScenario(pair[0]);
+        });
+      }
+    });
+    var pillsWrap = $("#scenario-pills");
+    if (pillsWrap) pillsWrap.dataset.ready = "1";
     function fromInputs() {
       var lat = parseFloat($("#lat-input").value), lng = parseFloat($("#lng-input").value);
       if ($("#lat-input").value.trim() === "" || $("#lng-input").value.trim() === "") return;

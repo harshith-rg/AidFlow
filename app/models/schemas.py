@@ -153,3 +153,88 @@ class RecommendHospitalResponse(BaseModel):
     warnings: list[WarningDetail] = Field(default_factory=list)
     assumptions: AssumptionsDetail
     generated_at: str
+
+
+# ---------------------------------------------------------------------------
+# Simulated Traffic Schemas (Phase 9 Demo)
+# ---------------------------------------------------------------------------
+class TrafficScenarioSummary(BaseModel):
+    """Metadata describing a simulated traffic scenario."""
+
+    scenario_id: str
+    name: str
+    description: str
+    corridor_factor: float
+    non_corridor_factor: float
+    has_closure: bool
+    closed_edges_count: int
+    disclaimer: str
+
+
+class TrafficScenariosResponse(BaseModel):
+    """List of available simulated traffic scenarios."""
+
+    scenarios: list[TrafficScenarioSummary]
+    disclaimer: str
+
+
+class SimulatedRecommendRequest(BaseModel):
+    """Request payload for POST /api/demo/recommend-simulated."""
+
+    case_id: str | None = None
+    origin: OriginCoordinates
+    needs: list[str] = Field(default_factory=list)
+    candidate_hospital_ids: list[str] | None = None
+    max_alternatives: int | None = 2
+    scenario: str = "normal"
+    algorithm: str = "astar"
+    custom_closed_edges: list[list[int]] | None = None
+
+    @field_validator("max_alternatives", mode="before")
+    @classmethod
+    def check_max_alternatives_strict_int(cls, v: Any) -> Any:
+        if v is None:
+            return 2
+        if isinstance(v, bool) or not isinstance(v, int):
+            raise ValueError("max_alternatives must be an integer, not boolean, string, or float")
+        if v < 0 or v > 5:
+            raise ValueError(f"max_alternatives must be between 0 and 5, but got {v}")
+        return v
+
+
+class SimulatedHospitalItem(BaseModel):
+    """Hospital recommendation with physical distance, baseline ETA, and simulated ETA."""
+
+    hospital_id: str
+    name: str
+    location: HospitalLocation | None = None
+    distance_km: float
+    baseline_eta_min: float
+    simulated_eta_min: float
+    delay_min: float
+    reason: str
+    bed_data_stale: bool
+
+
+class SimulatedRouteDetail(BaseModel):
+    """Road route with physical distance, baseline ETA, and simulated ETA."""
+
+    to_hospital_id: str
+    distance_km: float
+    baseline_eta_min: float
+    simulated_eta_min: float
+    delay_min: float
+    polyline: list[list[float]]
+
+
+class SimulatedRecommendResponse(BaseModel):
+    """Response payload for POST /api/demo/recommend-simulated."""
+
+    case_id: str | None = None
+    scenario: TrafficScenarioSummary
+    recommended: SimulatedHospitalItem
+    alternatives: list[SimulatedHospitalItem] = Field(default_factory=list)
+    route: SimulatedRouteDetail
+    warnings: list[WarningDetail] = Field(default_factory=list)
+    assumptions: AssumptionsDetail
+    generated_at: str

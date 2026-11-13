@@ -48,9 +48,10 @@ FAKE_LEAFLET = """
     divIcon: function (o) { return o; },
     latLngBounds: function (p) { return p; },
     marker: function (ll, o) {
-      var mk = { ll: ll, dest: /is-dest/.test(((o || {}).icon || {}).html || "") };
+      var mk = { ll: ll, dest: /is-dest/.test(((o || {}).icon || {}).html || ""), icon: (o || {}).icon };
       mk.addTo = function (g) { if (g.items) g.items.push(mk); return mk; };
-      ["setIcon", "bindPopup", "on", "openPopup"].forEach(function (k) { mk[k] = function () { return mk; }; });
+      mk.setIcon = function (i) { mk.icon = i; return mk; };
+      ["bindPopup", "on", "openPopup"].forEach(function (k) { mk[k] = function () { return mk; }; });
       mk.setLatLng = function (x) { mk.ll = x; return mk; };
       mk.getLatLng = function () { return { lat: mk.ll[0], lng: mk.ll[1] }; };
       return mk;
@@ -151,6 +152,58 @@ def page():
                         api.held = (route, api.recommend(body))
                         return None  # leave the request pending; the test decides when it ends
                     return route.fulfill(json=api.recommend(body))
+                if path == "/api/demo/recommend-simulated":
+                    body = json.loads(route.request.post_data)
+                    rec = api.recommend(body)
+                    scenario = body.get("scenario", "moderate")
+                    mult = 1.6 if scenario == "moderate" else (2.5 if scenario == "heavy" else 1.0)
+                    base_eta = rec["recommended"]["eta_min"]
+                    sim_eta = round(base_eta * mult, 1)
+                    delay = round(sim_eta - base_eta, 1)
+                    return route.fulfill(
+                        json={
+                            "case_id": body.get("case_id"),
+                            "scenario": {
+                                "scenario_id": scenario,
+                                "name": f"Simulated {scenario.title()}",
+                                "description": "Demo scenario",
+                                "corridor_factor": mult,
+                                "non_corridor_factor": 1.0,
+                                "has_closure": scenario == "closure",
+                                "closed_edges_count": 1 if scenario == "closure" else 0,
+                                "disclaimer": "SIMULATED TRAFFIC DEMO",
+                            },
+                            "recommended": {
+                                "hospital_id": rec["recommended"]["hospital_id"],
+                                "name": rec["recommended"]["name"],
+                                "location": rec["recommended"].get("location"),
+                                "distance_km": rec["recommended"]["distance_km"],
+                                "baseline_eta_min": base_eta,
+                                "simulated_eta_min": sim_eta,
+                                "delay_min": delay,
+                                "reason": rec["recommended"]["reason"],
+                                "bed_data_stale": False,
+                            },
+                            "alternatives": [],
+                            "route": {
+                                "to_hospital_id": rec["recommended"]["hospital_id"],
+                                "distance_km": rec["route"]["distance_km"],
+                                "baseline_eta_min": base_eta,
+                                "simulated_eta_min": sim_eta,
+                                "delay_min": delay,
+                                "polyline": rec["route"]["polyline"],
+                            },
+                            "warnings": [],
+                            "assumptions": {
+                                "eta_method": "simulated",
+                                "average_speed_kmh": 30.0,
+                                "live_traffic": False,
+                                "routing_algorithm": "astar",
+                                "hospital_data": "DEMO values",
+                            },
+                            "generated_at": "2026-11-10T00:00:00Z",
+                        }
+                    )
                 return route.fulfill(status=404, json={"error": {"code": "NOT_FOUND", "message": "x", "details": {}}})
             if "leaflet.js" in url:
                 return route.fulfill(body=FAKE_LEAFLET, content_type="text/javascript")
@@ -343,3 +396,80 @@ def test_no_sideways_scroll_on_the_smallest_phone(page):
     assert overflow <= 0, f"page is {overflow}px wider than the screen"
     page.click(".tab[data-tab=map]")
     assert page.evaluate("document.documentElement.scrollWidth - document.documentElement.clientWidth") <= 0
+
+
+def test_traffic_scenario_controls_and_eta_display(page):
+    _ask(page)
+    # Check default is normal
+    assert page.get_attribute("#scen-normal", "aria-pressed") == "true"
+    assert page.get_attribute("#scen-moderate", "aria-pressed") == "false"
+    assert "Normal" in page.inner_text("#scenario-desc")
+
+    # Switch to Moderate Congestion
+    page.click("#scen-moderate")
+    assert page.get_attribute("#scen-moderate", "aria-pressed") == "true"
+    assert page.get_attribute("#scen-normal", "aria-pressed") == "false"
+    assert "Moderate" in page.inner_text("#scenario-desc")
+
+    # Verify simulated ETA and labels appear in the result
+    page.wait_for_selector("text=SIMULATED:")
+    assert "Simulated ETA" in page.inner_text("#result-body")
+    assert "base" in page.inner_text("#result-body")
+    assert "Road distance (physical)" in page.inner_text("#result-body")
+
+    # Reset restores normal
+    page.click("#reset-btn")
+    assert page.get_attribute("#scen-normal", "aria-pressed") == "true"
+    assert page.get_attribute("#scen-moderate", "aria-pressed") == "false"
+
+
+def test_map_legend_and_marker_clarity(page):
+    # Desktop: map panel and legend are directly visible
+    assert page.is_visible("#map-legend")
+    legend_text = page.inner_text("#map-legend")
+    assert "LEGEND" in legend_text
+    assert "Pickup point (P)" in legend_text
+    assert "Recommended (#1)" in legend_text
+    assert "Alternative" in legend_text
+    assert "Hospital (+)" in legend_text
+    assert "Selected route" in legend_text
+
+    # Toggle legend collapse/expand
+    assert page.get_attribute("#legend-toggle-btn", "aria-expanded") == "true"
+    page.click("#legend-toggle-btn")
+    assert page.get_attribute("#legend-toggle-btn", "aria-expanded") == "false"
+    assert not page.is_visible("#legend-body")
+    page.click("#legend-toggle-btn")
+    assert page.get_attribute("#legend-toggle-btn", "aria-expanded") == "true"
+    assert page.is_visible("#legend-body")
+
+    # Run recommendation to check marker distinction
+    _ask(page)
+    icons = page.evaluate("window.__log.groups[0].items.map(function (m) { return ((m.icon || {}).html || ''); })")
+    # Recommended marker should have is-rec and "★ 1"
+    assert any("is-rec" in ic and "★ 1" in ic for ic in icons), f"Expected recommended marker in {icons}"
+    # Alternative marker should have is-alt and "2"
+    assert any("is-alt" in ic and "2" in ic for ic in icons), f"Expected alternative marker in {icons}"
+
+    # Route group should have destination marker with is-dest and is-rec
+    route_icons = page.evaluate("window.__log.groups[1].items.filter(function (m) { return m.dest; }).map(function (m) { return ((m.icon || {}).html || ''); })")
+    assert len(route_icons) == 1
+    assert "is-dest" in route_icons[0]
+    assert "is-rec" in route_icons[0]
+    assert "★ 1" in route_icons[0]
+
+    # View alternative and verify destination marker updates
+    page.click(".alt-card >> nth=0")
+    page.wait_for_selector(".alt-card[aria-pressed=true]")
+    route_icons_alt = page.evaluate("window.__log.groups[1].items.filter(function (m) { return m.dest; }).map(function (m) { return ((m.icon || {}).html || ''); })")
+    assert len(route_icons_alt) == 1
+    assert "is-dest" in route_icons_alt[0]
+    assert "is-alt" in route_icons_alt[0]
+    assert "2" in route_icons_alt[0]
+
+    # Mobile check: on phone width 320px, map tab shows legend without overflow
+    page.set_viewport_size({"width": 320, "height": 640})
+    page.click(".tab[data-tab=map]")
+    assert page.is_visible("#map-legend")
+    overflow = page.evaluate("document.documentElement.scrollWidth - document.documentElement.clientWidth")
+    assert overflow <= 0, f"page overflowed horizontally by {overflow}px"

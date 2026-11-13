@@ -6,6 +6,8 @@ as edge weights, and enforces deterministic tie-breaking.
 """
 
 import heapq
+import math
+from typing import Any
 
 from app.services.road_graph import Edge, RoadGraph, UnknownNodeError
 from app.services.routing import PathNotFoundError, RouteResult, build_polyline
@@ -17,6 +19,7 @@ def dijkstra(
     graph: RoadGraph,
     source: int,
     target: int,
+    overlay: Any = None,
 ) -> RouteResult:
     """Compute the shortest directed path from source to target using Dijkstra.
 
@@ -24,10 +27,11 @@ def dijkstra(
         graph: The RoadGraph instance to route across.
         source: Starting node ID (integer).
         target: Destination node ID (integer).
+        overlay: Optional TrafficOverlay for simulated congestion weights and road closures.
 
     Returns:
-        RouteResult containing the node sequence, total distance in metres,
-        traversed edges, and full coordinate polyline.
+        RouteResult containing the node sequence, total physical distance in metres,
+        traversed edges, full coordinate polyline, and optional effective cost.
 
     Raises:
         UnknownNodeError: If source or target is not in the graph.
@@ -51,6 +55,7 @@ def dijkstra(
             total_distance_m=0.0,
             edges=(),
             polyline=(coords,),
+            effective_cost_m=0.0 if overlay is not None else None,
         )
 
     # 3. Dijkstra data structures
@@ -76,11 +81,22 @@ def dijkstra(
             break
 
         for edge in graph.out_edges(u):
+            if overlay is not None and overlay.is_edge_closed(edge):
+                continue
+
             v = edge.target
             if v in visited:
                 continue
 
-            new_dist = current_dist + edge.length_m
+            edge_cost = (
+                edge.length_m
+                if overlay is None
+                else overlay.edge_effective_cost_m(edge, graph)
+            )
+            if not math.isfinite(edge_cost):
+                continue
+
+            new_dist = current_dist + edge_cost
             # Strict inequality ensures stable, deterministic predecessor choices
             if v not in dist or new_dist < dist[v]:
                 dist[v] = new_dist
@@ -109,13 +125,15 @@ def dijkstra(
 
     nodes_tuple = tuple(path_nodes)
     edges_tuple = tuple(path_edges)
-    total_dist = dist[target]
+    total_phys_dist = sum(e.length_m for e in edges_tuple) if path_edges else 0.0
+    effective_dist = dist[target]
     polyline = build_polyline(graph, nodes_tuple, edges_tuple)
 
     return RouteResult(
         nodes=nodes_tuple,
-        total_distance_m=total_dist,
+        total_distance_m=total_phys_dist,
         edges=edges_tuple,
         polyline=polyline,
+        effective_cost_m=effective_dist if overlay is not None else None,
     )
 

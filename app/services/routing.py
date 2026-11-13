@@ -46,15 +46,17 @@ class RouteResult:
 
     Attributes:
         nodes: Sequence of node IDs along the route from source to destination.
-        total_distance_m: Total road distance in metres along directed edges.
+        total_distance_m: Total physical road distance in metres along directed edges.
         edges: Directed Edge objects traversed along the route.
         polyline: Full sequence of (lat, lng) points describing the road curve.
+        effective_cost_m: Optional simulated travel-time distance cost under traffic overlay.
     """
 
     nodes: tuple[int, ...]
     total_distance_m: float
     edges: tuple[Edge, ...] = ()
     polyline: tuple[LatLng, ...] = ()
+    effective_cost_m: float | None = None
 
     def __post_init__(self) -> None:
         # Enforce float for total distance
@@ -66,6 +68,16 @@ class RouteResult:
         if not math.isfinite(dist_float) or dist_float < 0:
             raise ValueError("total_distance_m must be a non-negative finite number.")
         object.__setattr__(self, "total_distance_m", dist_float)
+
+        if self.effective_cost_m is not None:
+            if not isinstance(self.effective_cost_m, (int, float)) or isinstance(
+                self.effective_cost_m, bool
+            ):
+                raise TypeError("effective_cost_m must be a number.")
+            eff_float = float(self.effective_cost_m)
+            if not math.isfinite(eff_float) or eff_float < 0:
+                raise ValueError("effective_cost_m must be a non-negative finite number.")
+            object.__setattr__(self, "effective_cost_m", eff_float)
 
     @property
     def distance_m(self) -> float:
@@ -105,7 +117,9 @@ class RouteResult:
             return self.edges
         if index == 3:
             return self.polyline
-        raise IndexError(f"RouteResult index {index} out of range (0-3).")
+        if index == 4:
+            return self.effective_cost_m
+        raise IndexError(f"RouteResult index {index} out of range (0-4).")
 
 
 # ---------------------------------------------------------------------------
@@ -165,6 +179,7 @@ def find_route(
     source: int,
     target: int,
     algorithm: str = "astar",
+    overlay: Any = None,
 ) -> RouteResult:
     """Find the shortest directed road path using either 'astar' or 'dijkstra'.
 
@@ -177,11 +192,11 @@ def find_route(
     if normalized in ("astar", "a*", "a_star"):
         from app.services.astar import astar
 
-        return astar(graph, source, target)
+        return astar(graph, source, target, overlay=overlay)
     if normalized == "dijkstra":
         from app.services.dijkstra import dijkstra
 
-        return dijkstra(graph, source, target)
+        return dijkstra(graph, source, target, overlay=overlay)
 
     raise ValueError(
         f"Unknown routing algorithm {algorithm!r}. Supported: 'astar', 'dijkstra'."
@@ -196,6 +211,7 @@ def find_route_between_locations(
     dest_lng: object,
     algorithm: str = "astar",
     max_snap_distance_m: float | None = None,
+    overlay: Any = None,
 ) -> RouteResult:
     """Snap origin and destination coordinates to the road network and compute route.
 
@@ -219,4 +235,5 @@ def find_route_between_locations(
         origin_snap.node_id,
         dest_snap.node_id,
         algorithm=algorithm,
+        overlay=overlay,
     )
