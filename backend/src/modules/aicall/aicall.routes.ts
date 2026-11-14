@@ -273,10 +273,15 @@ aicallRouter.post('/ai-calls/:id/finalize', publicStrictRateLimiter, async (req,
     // registered emergency into a 500 response (which invites duplicate reports).
     try {
       const registeredCase = await getEmergencyCase(created.emergency.id)
-      emitToRoom('role:admin', 'case:created', { caseId: created.emergency.case_code, emergency: registeredCase })
+      emitToRoom('role:admin', 'case:created', {
+        caseId: created.emergency.case_code,
+        emergency: registeredCase,
+      })
     } catch (projectionError) {
-      logger.error({ err: projectionError, emergencyId: created.emergency.id }, 'AI-call case projection failed after registration')
-      emitToRoom('role:admin', 'case:created', { caseId: created.emergency.case_code })
+      logger.error(
+        { err: projectionError, emergencyId: created.emergency.id },
+        'AI-call case projection failed after registration',
+      )
     }
     void startDispatch(created.emergency.id).catch((dispatchError) => logger.error({ err: dispatchError, emergencyId: created.emergency.id }, 'AI-call dispatch start failed'))
     emitToRoom('role:admin', 'alert:new', { id: created.alertId, type: 'emergency_reported', message: alertMessage, emergencyId: created.emergency.id, targetRole: 'admin', createdAt: new Date().toISOString() })
