@@ -49,6 +49,12 @@ from app.services.snapping import OutOfCoverageError, snap_hospital, snap_to_roa
 logger = logging.getLogger("aidflow.api")
 router = APIRouter()
 
+class RouteRequest(BaseModel):
+    origin_lat: float
+    origin_lng: float
+    destination_lat: float
+    destination_lng: float
+
 ALLOWED_NEEDS = frozenset({
     "ICU",
     "TRAUMA",
@@ -481,6 +487,95 @@ def demo_route(req: DemoRouteRequest) -> dict[str, Any]:
 # endpoints above and /recommend-hospital, and it is served from the same address.
 INDEX_HTML = Path(__file__).resolve().parent.parent / "static" / "index.html"
 
+@router.post("/route", summary="Calculate road route between two coordinates")
+def calculate_route(req: RouteRequest) -> dict[str, Any]:
+    # Validate origin coordinates
+    try:
+        validate_lat_lng(req.origin_lat, req.origin_lng)
+        validate_lat_lng(req.destination_lat, req.destination_lng)
+    except CoordinateError as err:
+        raise AidFlowError(
+            ErrorCode.INVALID_COORDINATES,
+            str(err),
+            400,
+            {
+                "origin": {
+                    "lat": req.origin_lat,
+                    "lng": req.origin_lng,
+                },
+                "destination": {
+                    "lat": req.destination_lat,
+                    "lng": req.destination_lng,
+                },
+            },
+        ) from err
+
+    # Load the road graph
+    try:
+        graph = get_road_graph()
+    except GraphError as err:
+        logger.error("Failed to load road graph: %s", err)
+        raise AidFlowError(
+            ErrorCode.INTERNAL_ERROR,
+            "Road graph file not found.",
+            500,
+            {},
+        ) from err
+
+    # Snap both coordinates to the nearest road nodes
+    try:
+        snap_origin = snap_to_road(
+            graph, req.origin_lat, req.origin_lng
+        )
+        snap_destination = snap_to_road(
+            graph, req.destination_lat, req.destination_lng
+        )
+    except OutOfCoverageError as err:
+        raise AidFlowError(
+            ErrorCode.OUT_OF_COVERAGE,
+            str(err),
+            422,
+            {},
+        ) from err
+
+    # Calculate the shortest road route using A*
+    try:
+        route = find_route(
+            graph,
+            snap_origin.node_id,
+            snap_destination.node_id,
+            algorithm="astar",
+        )
+    except PathNotFoundError as err:
+        raise AidFlowError(
+            ErrorCode.NO_ROUTE_FOUND,
+            "No directed road route found between the supplied coordinates.",
+            422,
+            {},
+        ) from err
+
+    # Calculate estimated travel time
+    settings: Settings = (
+        getattr(request.app.state, "settings", None) or load_settings()
+    )
+    distance_eta = calculate_distance_eta(
+        route.total_distance_m,
+        settings.average_speed_kmh,
+    )
+
+    return {
+        "status": "ok",
+        "distance_km": distance_eta.distance_km,
+        "duration_min": distance_eta.eta_min,
+        "polyline": [list(point) for point in route.polyline],
+        "source": "python_astar",
+        "assumptions": {
+            "average_speed_kmh": settings.average_speed_kmh,
+            "live_traffic": False,
+            "routing_algorithm": "astar",
+            "demo_road_network": True,
+        },
+    }
 
 @router.get("/", include_in_schema=False)
 def demo_ui() -> FileResponse:
