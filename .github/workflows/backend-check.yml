@@ -36,6 +36,10 @@ jobs:
 
       - name: Run Backend Tests
         run: npm test
+        env:
+          NODE_ENV: test
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/aidflow_test
+          JWT_SECRET: test-only-secret-key-for-github-actions
 
       - name: Build Backend
         run: npm run build
