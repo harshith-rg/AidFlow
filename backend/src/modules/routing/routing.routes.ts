@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import { z } from 'zod'
 import { validate } from '../../middleware/validate'
-import { GraphProvider } from './providers/graph'
+import { getRoutingProvider } from './router'
 import type { LatLng } from './types'
 
 export const routingRouter = Router()
@@ -17,7 +17,7 @@ routingRouter.post('/routing/route', validate({ body: routeSchema }), async (req
   try {
     const from = req.body.from as LatLng
     const to = req.body.to as LatLng
-    const result = await new GraphProvider().route(from, to)
+    const result = await getRoutingProvider().route(from, to)
     res.json(result)
   } catch (err) {
     next(err)
