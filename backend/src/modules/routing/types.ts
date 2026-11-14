@@ -2,7 +2,7 @@ import type { LatLng } from '../../types/contract'
 
 export type { LatLng }
 
-export type RoutingProviderType = 'haversine' | 'graph' | 'osrm' | 'ors'
+export type RoutingProviderType = 'haversine' | 'graph' | 'osrm' | 'ors' | 'python'
 
 export interface RouteResult {
   distanceKm: number
