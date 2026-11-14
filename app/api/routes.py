@@ -488,7 +488,10 @@ def demo_route(req: DemoRouteRequest) -> dict[str, Any]:
 INDEX_HTML = Path(__file__).resolve().parent.parent / "static" / "index.html"
 
 @router.post("/route", summary="Calculate road route between two coordinates")
-def calculate_route(req: RouteRequest) -> dict[str, Any]:
+def calculate_route(
+    req: RouteRequest,
+    request: Request,
+) -> dict[str, Any]:
     # Validate origin coordinates
     try:
         validate_lat_lng(req.origin_lat, req.origin_lng)
