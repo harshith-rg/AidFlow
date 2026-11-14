@@ -1,3 +1,4 @@
+
 name: Backend TypeScript Check
 
 on:
@@ -32,3 +33,9 @@ jobs:
 
       - name: Check TypeScript
         run: npm run typecheck
+
+      - name: Run Backend Tests
+        run: npm test
+
+      - name: Build Backend
+        run: npm run build
