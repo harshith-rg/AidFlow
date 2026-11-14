@@ -3,6 +3,7 @@ import { HaversineProvider } from './providers/haversine'
 import { GraphProvider } from './providers/graph'
 import { OsrmProvider } from './providers/osrm'
 import { OrsProvider } from './providers/ors'
+import { PythonProvider } from './providers/python'
 import type { RoutingProvider, RoutingProviderType } from './types'
 
 export function getRoutingProvider(preferredProvider?: RoutingProviderType): RoutingProvider {
@@ -15,6 +16,8 @@ export function getRoutingProvider(preferredProvider?: RoutingProviderType): Rou
       return new OsrmProvider()
     case 'ors':
       return new OrsProvider()
+    case 'python':
+      return new PythonProvider()
     case 'haversine':
     default:
       return new HaversineProvider()
