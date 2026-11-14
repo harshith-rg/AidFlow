@@ -54,8 +54,12 @@ export function nextQuestion(missing: string[]): string {
   }
 
   if (missing.includes('specialContext')) {
-    return 'Please select any of the options shown below for special context.'
-  }
+  const options = SPECIAL_CONTEXT_OPTIONS
+    .map((option, index) => `${index + 1} ${option}`)
+    .join('\n')
+
+  return `Please select any of the options shown below for special context:\n${options}`
+}
 
   if (missing.includes('location')) {
     return 'Detecting your location automatically. Please keep location access allowed on your device.'
