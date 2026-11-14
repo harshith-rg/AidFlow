@@ -1,21 +1,26 @@
-import type { RouteResult, RoutingProvider } from '../types'
+import type { RouteResult, RoutingProvider, LatLng } from '../types'
 import { env } from '../../../config/env'
 
 interface PythonRouteResponse {
   status: string
   distance_km: number
   duration_min: number
-  polyline: unknown
+  polyline: [number, number][]
   source: string
-  assumptions: string[]
+  assumptions: {
+    average_speed_kmh: number
+    live_traffic: boolean
+    routing_algorithm: string
+    demo_road_network: boolean
+  }
 }
 
 export class PythonProvider implements RoutingProvider {
   readonly name = 'python'
 
   async route(
-    from: { lat: number; lng: number },
-    to: { lat: number; lng: number },
+    from: LatLng,
+    to: LatLng,
   ): Promise<RouteResult> {
     const baseUrl = env.PYTHON_ROUTING_URL.replace(/\/$/, '')
 
@@ -37,17 +42,28 @@ export class PythonProvider implements RoutingProvider {
     })
 
     if (!response.ok) {
-      throw new Error(`Python routing service failed with status ${response.status}`)
+      throw new Error(
+        `Python routing service failed with status ${response.status}`,
+      )
     }
 
     const data = (await response.json()) as PythonRouteResponse
 
+    if (data.status !== 'ok') {
+      throw new Error('Python routing service returned an invalid response')
+    }
+
+    const geometry: LatLng[] = data.polyline.map(([lat, lng]) => ({
+      lat,
+      lng,
+    }))
+
     return {
       distanceKm: data.distance_km,
       durationMin: data.duration_min,
-      geometry: data.polyline,
-      source: data.source,
-      assumptions: data.assumptions,
+      geometry,
+      source: 'python',
+      assumptions: `A* routing; average speed ${data.assumptions.average_speed_kmh} km/h; live traffic unavailable; demo road network`,
     }
   }
 }
