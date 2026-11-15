@@ -11,7 +11,7 @@ on:
 
 jobs:
   backend-check:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     services:
       postgres:
@@ -61,7 +61,7 @@ jobs:
         run: npm run build
 
   python-check:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout repository
@@ -70,7 +70,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11.9"
+         python-version: "3.11"
 
       - name: Install Python dependencies
         run: |
