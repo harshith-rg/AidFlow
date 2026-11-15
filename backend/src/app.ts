@@ -30,6 +30,7 @@ registerDispatchHook(async (id) => {
 registerTimeoutHandler(timeoutAttempt)
 
 export const app = express()
+app.set('trust proxy', 1)
 
 // Security headers
 app.use(helmet())
