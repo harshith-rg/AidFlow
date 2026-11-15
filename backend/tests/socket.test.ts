@@ -55,10 +55,12 @@ describe('Phase 7: Socket.IO Real-Time Gateway', () => {
     await closeTestPool()
   })
 
-  it('Rejects unauthenticated socket connection', async () => {
+  it('Rejects socket connection with an invalid token', async () => {
+    // Note: an empty token is intentionally allowed (demo control-room access, see realtime/socket.ts),
+    // so a malformed/invalid token is what must be rejected.
     const socket = Client(`http://localhost:${serverPort}`, {
       autoConnect: false,
-      auth: { token: '' },
+      auth: { token: 'not-a-valid-jwt' },
     })
 
     const connectError = await new Promise<string>((resolve) => {
