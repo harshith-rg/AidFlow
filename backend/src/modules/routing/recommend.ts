@@ -109,7 +109,8 @@ export async function recommendHospital(input: RecommendationInput): Promise<Rec
   }
 
   const requiredSpecs = SPECIALTY_REQUIREMENTS[emergencyType] || ['general']
-  const staleCutoff = Date.now() - (env.HOSPITAL_STALE_HOURS || 24) * 60 * 60 * 1000
+  const STALE_DATA_THRESHOLD_MS = 60 * 60 * 1000
+  const staleCutoff = Date.now() - STALE_DATA_THRESHOLD_MS
 
   const filteredOut: { hospitalId: string; name: string; why: string }[] = []
   const eligible: { candidate: HospitalCandidate; hasPrimarySpecialty: boolean; isStale: boolean }[] = []
