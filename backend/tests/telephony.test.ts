@@ -4,6 +4,7 @@ import { app } from '../src/app'
 import { pool } from '../src/db/pool'
 import { resetTestDb, closeTestPool, seedUser, seedAmbulance } from './helpers'
 import { offerNext } from '../src/modules/dispatch/engine'
+import { env } from '../src/config/env'
 
 describe('Section 5: Simulated Dummy-Number Helpline & Driver IVR', () => {
   let adminToken: string
@@ -14,7 +15,13 @@ describe('Section 5: Simulated Dummy-Number Helpline & Driver IVR', () => {
   let driver2Token: string
   let driver2Id: string
 
+  const originalRoutingProvider = env.ROUTING_PROVIDER
+
   beforeAll(async () => {
+    // The default 'graph' routing provider snaps nearby points to the same junction, so ETA ties
+    // are broken by snap distance and ranking no longer follows real proximity. Use haversine
+    // here so the ambulance ordering these tests assert on is deterministic.
+    env.ROUTING_PROVIDER = 'haversine'
     await resetTestDb()
     const adm = await seedUser({ email: 'admin_tel@aidflow.demo', role: 'admin', name: 'Admin Tel' })
     adminToken = adm.token
@@ -33,6 +40,7 @@ describe('Section 5: Simulated Dummy-Number Helpline & Driver IVR', () => {
   })
 
   afterAll(async () => {
+    env.ROUTING_PROVIDER = originalRoutingProvider
     await closeTestPool()
   })
 
