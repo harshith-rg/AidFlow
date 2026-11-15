@@ -151,6 +151,9 @@ describe('Section 5: Simulated Dummy-Number Helpline & Driver IVR', () => {
   })
 
   it('Driver IVR: DTMF 2 rejects offer and offers to next candidate', async () => {
+    await pool.query(
+  "UPDATE ambulances SET status = 'offline' WHERE status = 'available'"
+  )
     const drRej1 = await seedUser({ email: 'driver_rej1@aidflow.demo', role: 'driver', name: 'Driver Rej 1' })
     const drRej2 = await seedUser({ email: 'driver_rej2@aidflow.demo', role: 'driver', name: 'Driver Rej 2' })
     const amb1 = await seedAmbulance({ label: 'AMB-REJ-01', lat: 12.92, lng: 77.58, driverId: drRej1.id })
