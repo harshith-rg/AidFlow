@@ -115,40 +115,40 @@ export async function recommendHospital(input: RecommendationInput): Promise<Rec
   const filteredOut: { hospitalId: string; name: string; why: string }[] = []
   const eligible: { candidate: HospitalCandidate; hasPrimarySpecialty: boolean; isStale: boolean }[] = []
 
-  for (const c of candidates) {
-    if (!c.is_operational) {
-      filteredOut.push({ hospitalId: c.id, name: c.name, why: 'Hospital is currently not operational' })
-      continue
-    }
-
-    if (c.capacity_status === 'full') {
-      filteredOut.push({ hospitalId: c.id, name: c.name, why: 'Hospital capacity is full' })
-      continue
-    }
-
-    if (typeof c.lat !== 'number' || typeof c.lng !== 'number' || isNaN(c.lat) || isNaN(c.lng)) {
-      filteredOut.push({ hospitalId: c.id, name: c.name, why: 'Invalid hospital coordinates' })
-      continue
-    }
-
-    const hospSpecs = (c.specialties || []).map((s) => s.toLowerCase())
-    const hasPrimary = requiredSpecs.some((s) => hospSpecs.includes(s.toLowerCase()))
-    const hasGeneralFallback = hospSpecs.includes('general')
-
-    if (!hasPrimary && !hasGeneralFallback) {
-      filteredOut.push({
-        hospitalId: c.id,
-        name: c.name,
-        why: `Missing required specialty (${requiredSpecs.join('/')}) and no general fallback`,
-      })
-      continue
-    }
-
-    const lastUpdatedMs = c.last_updated ? new Date(c.last_updated).getTime() : 0
-    const isStale = lastUpdatedMs > 0 && lastUpdatedMs < staleCutoff
-
-    eligible.push({ candidate: c, hasPrimarySpecialty: hasPrimary, isStale })
+ for (const c of candidates) {
+  if (!c.is_operational) {
+    filteredOut.push({ hospitalId: c.id, name: c.name, why: 'Hospital is currently not operational' })
+    continue
   }
+
+  const lastUpdatedMs = c.last_updated ? new Date(c.last_updated).getTime() : 0
+  const isStale = lastUpdatedMs > 0 && lastUpdatedMs < staleCutoff
+
+  if (c.capacity_status === 'full' && !isStale) {
+    filteredOut.push({ hospitalId: c.id, name: c.name, why: 'Hospital capacity is full' })
+    continue
+  }
+
+  if (typeof c.lat !== 'number' || typeof c.lng !== 'number' || isNaN(c.lat) || isNaN(c.lng)) {
+    filteredOut.push({ hospitalId: c.id, name: c.name, why: 'Invalid hospital coordinates' })
+    continue
+  }
+
+  const hospSpecs = (c.specialties || []).map((s) => s.toLowerCase())
+  const hasPrimary = requiredSpecs.some((s) => hospSpecs.includes(s.toLowerCase()))
+  const hasGeneralFallback = hospSpecs.includes('general')
+
+  if (!hasPrimary && !hasGeneralFallback) {
+    filteredOut.push({
+      hospitalId: c.id,
+      name: c.name,
+      why: `Missing required specialty (${requiredSpecs.join('/')}) and no general fallback`,
+    })
+    continue
+  }
+
+  eligible.push({ candidate: c, hasPrimarySpecialty: hasPrimary, isStale })
+}
 
   if (eligible.length === 0) {
     return {
