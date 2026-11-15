@@ -168,45 +168,35 @@ export async function recommendHospital(input: RecommendationInput): Promise<Rec
 
   for (const item of eligible) {
     const { candidate, hasPrimarySpecialty, isStale } = item
-    const route = await routingProvider.route(pickup, { lat: candidate.lat, lng: candidate.lng })
 
-    let penalty = 0
+    const route = await routingProvider.route(pickup, {
+      lat: candidate.lat,
+      lng: candidate.lng,
+    })
+
     const factors: string[] = []
 
-    if (candidate.capacity_status === 'limited') {
-      penalty += 5
-      factors.push('limited bed capacity (+5)')
-    } else if (candidate.capacity_status === 'unknown') {
-      penalty += 8
-      factors.push('unconfirmed bed capacity (+8)')
-    } else {
-      factors.push('bed capacity available')
-    }
-
     if (isStale) {
-      penalty += 5
-      factors.push('stale capacity telemetry (+5)')
+      factors.push('Bed data is stale; bed count ignored')
+    } else if (typeof candidate.beds === 'number') {
+      factors.push(`${candidate.beds} available beds`)
+    } else {
+      factors.push('Bed availability unconfirmed')
     }
 
-    if (severity === 'critical' && (!candidate.icu_beds || candidate.icu_beds === 0)) {
-      penalty += 10
-      factors.push('critical case with 0 ICU beds (+10)')
-    } else if (candidate.icu_beds && candidate.icu_beds > 0) {
+    if (typeof candidate.icu_beds === 'number' && candidate.icu_beds > 0) {
       factors.push(`${candidate.icu_beds} ICU beds`)
     }
 
     if (!hasPrimarySpecialty) {
-      penalty += 6
-      factors.push(`general facility fallback for ${emergencyType} (+6)`)
+      factors.push(`General facility fallback for ${emergencyType}`)
     } else {
-      factors.push(`specialized in ${requiredSpecs.join('/')}`)
+      factors.push(`Specialized in ${requiredSpecs.join('/')}`)
     }
-
-    const score = route.durationMin + penalty
 
     scoredList.push({
       hospital: candidate,
-      score,
+      score: route.durationMin,
       distanceKm: route.distanceKm,
       etaMinutes: route.durationMin,
       etaSource: route.source,
@@ -215,10 +205,43 @@ export async function recommendHospital(input: RecommendationInput): Promise<Rec
     })
   }
 
-  // Sort: lower score wins; tie-break: lower distanceKm, then hospital name
+  // Identify ETA groups containing at least one stale hospital.
+  const staleHospitalIds = new Set(
+    eligible
+      .filter((item) => item.isStale)
+      .map((item) => item.candidate.id)
+  )
+
+  const staleEtaGroups = new Set(
+    scoredList
+      .filter((item) => staleHospitalIds.has(item.hospital.id))
+      .map((item) => item.etaMinutes)
+  )
+
+  // Rank by ETA, then fresh bed counts, then hospital name.
+  // If an ETA group contains stale data, ignore bed counts
+  // for the entire group and use alphabetical order.
   scoredList.sort((a, b) => {
-    if (a.score !== b.score) return a.score - b.score
-    if (a.distanceKm !== b.distanceKm) return a.distanceKm - b.distanceKm
+    if (a.etaMinutes !== b.etaMinutes) {
+      return a.etaMinutes - b.etaMinutes
+    }
+
+    if (staleEtaGroups.has(a.etaMinutes)) {
+      return a.hospital.name.localeCompare(b.hospital.name)
+    }
+
+    const bedsA = typeof a.hospital.beds === 'number'
+      ? a.hospital.beds
+      : Number.NEGATIVE_INFINITY
+
+    const bedsB = typeof b.hospital.beds === 'number'
+      ? b.hospital.beds
+      : Number.NEGATIVE_INFINITY
+
+    if (bedsA !== bedsB) {
+      return bedsB - bedsA
+    }
+
     return a.hospital.name.localeCompare(b.hospital.name)
   })
 
