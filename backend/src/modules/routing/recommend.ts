@@ -1,3 +1,4 @@
+
 import type { PoolClient } from 'pg'
 import { pool } from '../../db/pool'
 import { env } from '../../config/env'
@@ -66,27 +67,34 @@ const SPECIALTY_REQUIREMENTS: Record<EmergencyTypeId, string[]> = {
 }
 
 /**
- * Recommends the optimal hospital for an emergency case based on specialty match,
- * capacity, ICU availability, real/estimated travel time, and penalty scoring.
+ * Recommends the optimal hospital based on specialty match,
+ * capacity, ICU availability, travel time, and penalty scoring.
  */
-export async function recommendHospital(input: RecommendationInput): Promise<RecommendationOutput> {
+export async function recommendHospital(
+  input: RecommendationInput,
+): Promise<RecommendationOutput> {
   const { pickup, emergencyType, severity } = input
 
   if (
     typeof pickup?.lat !== 'number' ||
     typeof pickup?.lng !== 'number' ||
+    !Number.isFinite(pickup.lat) ||
+    !Number.isFinite(pickup.lng) ||
     pickup.lat < -90 ||
     pickup.lat > 90 ||
     pickup.lng < -180 ||
     pickup.lng > 180
   ) {
-    throw badRequest('Valid pickup coordinates are required for hospital recommendation.')
+    throw badRequest(
+      'Valid pickup coordinates are required for hospital recommendation.',
+    )
   }
 
-  // Fetch candidates from DB if not provided
   let candidates = input.candidates
+
   if (!candidates) {
     const db = input.client || pool
+
     const res = await db.query(
       `SELECT id, name, address, phone, category, lat, lng,
               is_operational, capacity_status, beds, icu_beds,
@@ -96,8 +104,9 @@ export async function recommendHospital(input: RecommendationInput): Promise<Rec
          AND lng BETWEEN $2 - 0.90 AND $2 + 0.90
        ORDER BY ((lat - $1) * (lat - $1) + (lng - $2) * (lng - $2))
        LIMIT 60`,
-      [pickup.lat, pickup.lng]
+      [pickup.lat, pickup.lng],
     )
+
     candidates = res.rows.map((r) => ({
       ...r,
       lat: Number(r.lat),
@@ -108,53 +117,98 @@ export async function recommendHospital(input: RecommendationInput): Promise<Rec
     }))
   }
 
-  const requiredSpecs = SPECIALTY_REQUIREMENTS[emergencyType] || ['general']
+  const requiredSpecs =
+    SPECIALTY_REQUIREMENTS[emergencyType] || ['general']
+
   const STALE_DATA_THRESHOLD_MS = 60 * 60 * 1000
   const staleCutoff = Date.now() - STALE_DATA_THRESHOLD_MS
 
-  const filteredOut: { hospitalId: string; name: string; why: string }[] = []
-  const eligible: { candidate: HospitalCandidate; hasPrimarySpecialty: boolean; isStale: boolean }[] = []
+  const filteredOut: {
+    hospitalId: string
+    name: string
+    why: string
+  }[] = []
 
- for (const c of candidates) {
-  if (!c.is_operational) {
-    filteredOut.push({ hospitalId: c.id, name: c.name, why: 'Hospital is currently not operational' })
-    continue
-  }
+  const eligible: {
+    candidate: HospitalCandidate
+    hasPrimarySpecialty: boolean
+    isStale: boolean
+  }[] = []
 
-  const lastUpdatedMs = c.last_updated ? new Date(c.last_updated).getTime() : 0
-  const isStale = lastUpdatedMs > 0 && lastUpdatedMs < staleCutoff
+  for (const c of candidates) {
+    if (!c.is_operational) {
+      filteredOut.push({
+        hospitalId: c.id,
+        name: c.name,
+        why: 'Hospital is currently not operational',
+      })
+      continue
+    }
 
-  if (c.capacity_status === 'full' && !isStale) {
-    filteredOut.push({ hospitalId: c.id, name: c.name, why: 'Hospital capacity is full' })
-    continue
-  }
+    const lastUpdatedMs = c.last_updated
+      ? new Date(c.last_updated).getTime()
+      : 0
 
-  if (typeof c.lat !== 'number' || typeof c.lng !== 'number' || isNaN(c.lat) || isNaN(c.lng)) {
-    filteredOut.push({ hospitalId: c.id, name: c.name, why: 'Invalid hospital coordinates' })
-    continue
-  }
+    const isStale =
+      lastUpdatedMs === 0 ||
+      !Number.isFinite(lastUpdatedMs) ||
+      lastUpdatedMs < staleCutoff
 
-  const hospSpecs = (c.specialties || []).map((s) => s.toLowerCase())
-  const hasPrimary = requiredSpecs.some((s) => hospSpecs.includes(s.toLowerCase()))
-  const hasGeneralFallback = hospSpecs.includes('general')
+    if (c.capacity_status === 'full' && !isStale) {
+      filteredOut.push({
+        hospitalId: c.id,
+        name: c.name,
+        why: 'Hospital capacity is full',
+      })
+      continue
+    }
 
-  if (!hasPrimary && !hasGeneralFallback) {
-    filteredOut.push({
-      hospitalId: c.id,
-      name: c.name,
-      why: `Missing required specialty (${requiredSpecs.join('/')}) and no general fallback`,
+    if (
+      typeof c.lat !== 'number' ||
+      typeof c.lng !== 'number' ||
+      !Number.isFinite(c.lat) ||
+      !Number.isFinite(c.lng)
+    ) {
+      filteredOut.push({
+        hospitalId: c.id,
+        name: c.name,
+        why: 'Invalid hospital coordinates',
+      })
+      continue
+    }
+
+    const hospSpecs = (c.specialties || []).map((s) =>
+      s.toLowerCase(),
+    )
+
+    const hasPrimary = requiredSpecs.some((s) =>
+      hospSpecs.includes(s.toLowerCase()),
+    )
+
+    const hasGeneralFallback = hospSpecs.includes('general')
+
+    if (!hasPrimary && !hasGeneralFallback) {
+      filteredOut.push({
+        hospitalId: c.id,
+        name: c.name,
+        why: `Missing required specialty (${requiredSpecs.join('/')}) and no general fallback`,
+      })
+      continue
+    }
+
+    eligible.push({
+      candidate: c,
+      hasPrimarySpecialty: hasPrimary,
+      isStale,
     })
-    continue
   }
-
-  eligible.push({ candidate: c, hasPrimarySpecialty: hasPrimary, isStale })
-}
 
   if (eligible.length === 0) {
     return {
       recommended: null,
       alternatives: [],
-      reason: 'No suitable hospital found matching specialty or capacity requirements in the operational area.',
+      reason:
+        'No suitable hospital found matching specialty or capacity requirements in the operational area.',
       distanceKm: 0,
       etaMinutes: 0,
       etaSource: 'none',
@@ -175,28 +229,46 @@ export async function recommendHospital(input: RecommendationInput): Promise<Rec
     })
 
     const factors: string[] = []
+    let penalty = 0
 
     if (isStale) {
-      factors.push('Bed data is stale; bed count ignored')
+      penalty += 5
+      factors.push('stale capacity telemetry (+5)')
     } else if (typeof candidate.beds === 'number') {
       factors.push(`${candidate.beds} available beds`)
     } else {
       factors.push('Bed availability unconfirmed')
     }
 
-    if (typeof candidate.icu_beds === 'number' && candidate.icu_beds > 0) {
+    if (
+      typeof candidate.icu_beds === 'number' &&
+      candidate.icu_beds > 0 &&
+      !isStale
+    ) {
       factors.push(`${candidate.icu_beds} ICU beds`)
     }
 
     if (!hasPrimarySpecialty) {
-      factors.push(`General facility fallback for ${emergencyType}`)
+      penalty += 6
+      factors.push(
+        `general facility fallback for ${emergencyType} (+6)`,
+      )
     } else {
       factors.push(`Specialized in ${requiredSpecs.join('/')}`)
     }
 
+    if (
+      severity === 'critical' &&
+      !isStale &&
+      candidate.icu_beds === 0
+    ) {
+      penalty += 10
+      factors.push('critical case with 0 ICU beds (+10)')
+    }
+
     scoredList.push({
       hospital: candidate,
-      score: route.durationMin,
+      score: route.durationMin + penalty,
       distanceKm: route.distanceKm,
       etaMinutes: route.durationMin,
       etaSource: route.source,
@@ -205,38 +277,44 @@ export async function recommendHospital(input: RecommendationInput): Promise<Rec
     })
   }
 
-  // Identify ETA groups containing at least one stale hospital.
+  // Identify ETA groups containing stale hospitals.
   const staleHospitalIds = new Set(
     eligible
       .filter((item) => item.isStale)
-      .map((item) => item.candidate.id)
+      .map((item) => item.candidate.id),
   )
 
   const staleEtaGroups = new Set(
     scoredList
       .filter((item) => staleHospitalIds.has(item.hospital.id))
-      .map((item) => item.etaMinutes)
+      .map((item) => item.etaMinutes),
   )
 
-  // Rank by ETA, then fresh bed counts, then hospital name.
-  // If an ETA group contains stale data, ignore bed counts
-  // for the entire group and use alphabetical order.
+  // Lower scores are better.
+  // Score includes ETA and all applicable penalties.
   scoredList.sort((a, b) => {
+    if (a.score !== b.score) {
+      return a.score - b.score
+    }
+
     if (a.etaMinutes !== b.etaMinutes) {
       return a.etaMinutes - b.etaMinutes
     }
 
+    // Ignore bed counts when an ETA group contains stale data.
     if (staleEtaGroups.has(a.etaMinutes)) {
       return a.hospital.name.localeCompare(b.hospital.name)
     }
 
-    const bedsA = typeof a.hospital.beds === 'number'
-      ? a.hospital.beds
-      : Number.NEGATIVE_INFINITY
+    const bedsA =
+      typeof a.hospital.beds === 'number'
+        ? a.hospital.beds
+        : Number.NEGATIVE_INFINITY
 
-    const bedsB = typeof b.hospital.beds === 'number'
-      ? b.hospital.beds
-      : Number.NEGATIVE_INFINITY
+    const bedsB =
+      typeof b.hospital.beds === 'number'
+        ? b.hospital.beds
+        : Number.NEGATIVE_INFINITY
 
     if (bedsA !== bedsB) {
       return bedsB - bedsA
