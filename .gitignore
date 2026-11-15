@@ -6,3 +6,6 @@ phase0/cache/
 *.graphml
 *.graphml.part
 .env
+
+# Node.js dependencies
+backend/node_modules/
