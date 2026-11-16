@@ -1,0 +1,12 @@
+import { useEffect } from 'react'
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
+import L from 'leaflet'
+import 'leaflet/dist/leaflet.css'
+
+type Point={id:string;name:string;lat:number;lng:number;address?:string;distance?:number}
+type Ambulance={id:string;name:string;lat:number;lng:number;status?:string}
+const hospitalIcon=L.divIcon({className:'aidflow-hospital-marker',html:'<span class="hospital-map-pin-inner">✚</span>',iconSize:[38,44],iconAnchor:[19,42],popupAnchor:[0,-40]})
+const userIcon=L.divIcon({className:'aidflow-user-marker',html:'<span>●</span>',iconSize:[22,22],iconAnchor:[11,11]})
+const ambulanceIcon=L.divIcon({className:'aidflow-ambulance-marker',html:'<span>🚑</span>',iconSize:[34,34],iconAnchor:[17,17],popupAnchor:[0,-16]})
+function Recenter({center,points}:{center:[number,number];points:Point[]}){const map=useMap();useEffect(()=>{const valid=points.filter(p=>Number.isFinite(p.lat)&&Number.isFinite(p.lng));if(valid.length>1){const bounds=L.latLngBounds(valid.map(p=>[p.lat,p.lng] as [number,number]));map.fitBounds(bounds,{padding:[28,28],maxZoom:13})}else if(valid.length===1){map.setView([valid[0].lat,valid[0].lng],14)}else{map.setView(center,11)}},[center,points,map]);return null}
+export default function HospitalMap({points,center,userLocation,ambulances=[]}:{points:Point[];center:[number,number];userLocation:boolean;ambulances?:Ambulance[]}){return <div className="aidflow-map-wrap"><MapContainer center={center} zoom={12} scrollWheelZoom className="aidflow-map"><TileLayer attribution='Imagery &copy; Esri, Maxar, Earthstar Geographics' url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"/><Recenter center={center} points={points}/>{userLocation&&<Marker position={center} icon={userIcon}><Popup>Your current location</Popup></Marker>}{points.map(p=><Marker key={p.id} position={[p.lat,p.lng]} icon={hospitalIcon}><Popup><strong>{p.name}</strong><br/>{p.distance!==undefined?`${p.distance.toFixed(1)} km away`:p.address}<br/><a target="_blank" rel="noreferrer" href={`https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}`}>Directions</a></Popup></Marker>)}{ambulances.map(a=><Marker key={a.id} position={[a.lat,a.lng]} icon={ambulanceIcon}><Popup><strong>{a.name}</strong><br/>{a.status||'Availability demo'}<br/><small>Illustrative fleet location, not live GPS</small></Popup></Marker>)}</MapContainer></div>}

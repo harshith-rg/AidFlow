@@ -1,11 +1,33 @@
+# Node.js dependencies & build outputs
+node_modules/
+backend/node_modules/
+dist/
+dist-ssr/
+backend/dist/
+*.local
+*.tsbuildinfo
+vite*.config.js
+vite*.config.d.ts
+
+# Environment variables
+.env
+.env.*
+!.env.example
+!backend/.env.example
+
+# Python virtual environment and bytecode
 .venv/
 __pycache__/
 .pytest_cache/
 *.pyc
 phase0/cache/
+
+# Large graph files
 *.graphml
 *.graphml.part
-.env
 
-# Node.js dependencies
-backend/node_modules/
+# OS / Editor artifacts
+.DS_Store
+Thumbs.db
+*.log
+*.code-workspace

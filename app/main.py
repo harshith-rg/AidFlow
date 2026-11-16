@@ -25,7 +25,13 @@ logger = logging.getLogger("uvicorn.error")
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 # Addresses where the React demo UI will run during local development.
-ALLOWED_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"]
+# Port 5173: Control Room; Port 5174: User AI Call emergency intake.
+ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:5174",
+    "http://127.0.0.1:5174",
+]
 
 
 @asynccontextmanager

@@ -1,0 +1,138 @@
+/* Shared UI states for AidFlow pages: banners, errors, badges, buttons. */
+
+.af-demo-banner {
+  width: 100%;
+  padding: 9px 16px;
+  text-align: center;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  color: #fde68a;
+  background: rgba(245, 158, 11, 0.12);
+  border-bottom: 1px solid rgba(245, 158, 11, 0.35);
+}
+.af-demo-banner strong { letter-spacing: 0.05em; }
+.af-demo-banner a { text-decoration: underline; font-weight: 600; }
+
+.af-error,
+.af-warn,
+.af-info {
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  margin-bottom: 16px;
+}
+.af-error { background: rgba(225, 29, 46, 0.12); border: 1px solid rgba(225, 29, 46, 0.5); color: #fecaca; }
+.af-warn { background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.45); color: #fde68a; }
+.af-info { background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.4); color: #bae6fd; }
+.af-error a, .af-warn a { text-decoration: underline; font-weight: 600; }
+
+.af-field-error { color: #fca5a5; font-size: 0.8rem; margin-top: 6px; }
+.er-field input[aria-invalid='true'] { border-color: rgba(225, 29, 46, 0.7); }
+
+.af-link-btn {
+  background: none;
+  border: 1px solid var(--line);
+  color: var(--cyan-dim);
+  font-size: 0.82rem;
+  padding: 7px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  margin-top: 10px;
+}
+.af-link-btn:hover { border-color: var(--cyan); }
+.af-link-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.af-hint { color: var(--muted); font-size: 0.8rem; margin-top: 8px; text-align: right; }
+
+.af-badge {
+  display: inline-block;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 3px 9px;
+  border-radius: 999px;
+}
+.af-badge.critical { background: rgba(225, 29, 46, 0.18); color: #fca5a5; }
+.af-badge.high { background: rgba(245, 158, 11, 0.18); color: #fcd34d; }
+.af-badge.medium { background: rgba(56, 189, 248, 0.16); color: #7dd3fc; }
+.af-badge.test { background: rgba(167, 139, 250, 0.18); color: #c4b5fd; margin-left: 6px; }
+
+.af-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.af-meta code {
+  color: var(--text);
+  font-weight: 700;
+  font-size: 0.95rem;
+  letter-spacing: 0.02em;
+}
+
+.af-time { font-size: 0.72rem; color: var(--muted); margin-left: 8px; font-weight: 400; }
+.af-note { font-size: 0.72rem; color: var(--muted); margin-top: 4px; font-weight: 400; line-height: 1.4; }
+
+.af-call-row { display: flex; gap: 10px; margin: 16px 0 6px; }
+.af-call-btn {
+  flex: 1;
+  text-align: center;
+  padding: 12px;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 0.9rem;
+  background: var(--red);
+  color: #fff;
+}
+.af-call-btn:hover { background: var(--red-hover); }
+
+.af-confirm {
+  margin-top: 16px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+}
+.af-confirm p { font-size: 0.88rem; margin-bottom: 10px; }
+.af-confirm textarea {
+  width: 100%;
+  min-height: 64px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 10px;
+  font: inherit;
+  font-size: 0.88rem;
+  resize: vertical;
+}
+.af-confirm-row { display: flex; gap: 10px; margin-top: 10px; }
+.af-confirm-row button {
+  flex: 1;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: none;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.88rem;
+}
+.af-confirm-row .danger { background: var(--red); border-color: var(--red); font-weight: 600; }
+.af-confirm-row button:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.af-center { text-align: center; padding: 30px 10px; }
+.af-center h2 { margin-bottom: 8px; }
+.af-center p { color: var(--muted); font-size: 0.9rem; margin-bottom: 16px; }
+.af-center a.af-primary {
+  display: inline-block;
+  padding: 11px 20px;
+  border-radius: 10px;
+  background: var(--red);
+  color: #fff;
+  font-weight: 600;
+}
