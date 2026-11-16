@@ -10,7 +10,8 @@
     "dev:python": "uvicorn app.main:app --port 8000 --reload",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit && npm --prefix backend run typecheck",
+    "typecheck": "tsc --noEmit",
+    "typecheck:all": "tsc --noEmit && npm --prefix backend run typecheck",
     "test": "npm --prefix backend test",
     "dev:user": "vite --config vite.user.config.ts --host 0.0.0.0 --strictPort",
     "dev:control": "vite --config vite.control.config.ts --host 0.0.0.0 --strictPort"
