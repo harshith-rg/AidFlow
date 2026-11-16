@@ -3,9 +3,38 @@ import type { PoolClient } from 'pg'
 import { pool } from '../../db/pool'
 import { env } from '../../config/env'
 import { getRoutingProvider } from './router'
-import type { LatLng } from './types'
+import { HaversineProvider } from './providers/haversine'
+import type { LatLng, RouteResult } from './types'
 import type { EmergencyTypeId, Severity } from '../../types/contract'
 import { badRequest } from '../../utils/errors'
+import { logger } from '../../utils/logger'
+
+export const ROUTING_CONCURRENCY_LIMIT = 5
+
+/**
+ * Executes an async mapper over items with bounded concurrency, preserving input order.
+ */
+export async function mapWithBoundedConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  if (items.length === 0) return []
+  const maxConcurrency = Math.max(1, Math.min(limit, items.length))
+  const results = new Array<R>(items.length)
+  let nextIndex = 0
+
+  const worker = async () => {
+    while (nextIndex < items.length) {
+      const idx = nextIndex++
+      results[idx] = await fn(items[idx], idx)
+    }
+  }
+
+  const workers = Array.from({ length: maxConcurrency }, () => worker())
+  await Promise.all(workers)
+  return results
+}
 
 export interface HospitalCandidate {
   id: string
@@ -218,64 +247,79 @@ export async function recommendHospital(
   }
 
   const routingProvider = getRoutingProvider()
-  const scoredList: ScoredHospital[] = []
 
-  for (const item of eligible) {
-    const { candidate, hasPrimarySpecialty, isStale } = item
+  const scoredList: ScoredHospital[] = await mapWithBoundedConcurrency(
+    eligible,
+    ROUTING_CONCURRENCY_LIMIT,
+    async (item) => {
+      const { candidate, hasPrimarySpecialty, isStale } = item
 
-    const route = await routingProvider.route(pickup, {
-      lat: candidate.lat,
-      lng: candidate.lng,
-    })
+      let route: RouteResult
+      try {
+        route = await routingProvider.route(pickup, {
+          lat: candidate.lat,
+          lng: candidate.lng,
+        })
+      } catch (err) {
+        logger.warn(
+          { err, hospitalId: candidate.id },
+          'Routing provider threw error; falling back to haversine',
+        )
+        route = await new HaversineProvider().route(pickup, {
+          lat: candidate.lat,
+          lng: candidate.lng,
+        })
+      }
 
-    const factors: string[] = []
-    let penalty = 0
+      const factors: string[] = []
+      let penalty = 0
 
-    if (isStale) {
-      penalty += 5
-      factors.push('stale capacity telemetry (+5)')
-    } else if (typeof candidate.beds === 'number') {
-      factors.push(`${candidate.beds} available beds`)
-    } else {
-      factors.push('Bed availability unconfirmed')
-    }
+      if (isStale) {
+        penalty += 5
+        factors.push('stale capacity telemetry (+5)')
+      } else if (typeof candidate.beds === 'number') {
+        factors.push(`${candidate.beds} available beds`)
+      } else {
+        factors.push('Bed availability unconfirmed')
+      }
 
-    if (
-      typeof candidate.icu_beds === 'number' &&
-      candidate.icu_beds > 0 &&
-      !isStale
-    ) {
-      factors.push(`${candidate.icu_beds} ICU beds`)
-    }
+      if (
+        typeof candidate.icu_beds === 'number' &&
+        candidate.icu_beds > 0 &&
+        !isStale
+      ) {
+        factors.push(`${candidate.icu_beds} ICU beds`)
+      }
 
-    if (!hasPrimarySpecialty) {
-      penalty += 6
-      factors.push(
-        `general facility fallback for ${emergencyType} (+6)`,
-      )
-    } else {
-      factors.push(`Specialized in ${requiredSpecs.join('/')}`)
-    }
+      if (!hasPrimarySpecialty) {
+        penalty += 6
+        factors.push(
+          `general facility fallback for ${emergencyType} (+6)`,
+        )
+      } else {
+        factors.push(`Specialized in ${requiredSpecs.join('/')}`)
+      }
 
-    if (
-      severity === 'critical' &&
-      !isStale &&
-      candidate.icu_beds === 0
-    ) {
-      penalty += 10
-      factors.push('critical case with 0 ICU beds (+10)')
-    }
+      if (
+        severity === 'critical' &&
+        !isStale &&
+        candidate.icu_beds === 0
+      ) {
+        penalty += 10
+        factors.push('critical case with 0 ICU beds (+10)')
+      }
 
-    scoredList.push({
-      hospital: candidate,
-      score: route.durationMin + penalty,
-      distanceKm: route.distanceKm,
-      etaMinutes: route.durationMin,
-      etaSource: route.source,
-      geometry: route.geometry,
-      factors,
-    })
-  }
+      return {
+        hospital: candidate,
+        score: route.durationMin + penalty,
+        distanceKm: route.distanceKm,
+        etaMinutes: route.durationMin,
+        etaSource: route.source,
+        geometry: route.geometry,
+        factors,
+      }
+    },
+  )
 
   // Identify ETA groups containing stale hospitals.
   const staleHospitalIds = new Set(

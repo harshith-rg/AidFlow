@@ -1,5 +1,5 @@
 
-name: Backend and Python Checks
+name: Full Project CI Checks
 
 on:
   push:
@@ -10,6 +10,27 @@ on:
       - integration
 
 jobs:
+  frontend-check:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Check TypeScript & Build Frontend
+        run: |
+          npm run typecheck
+          npm run build
+
   backend-check:
     runs-on: ubuntu-24.04
 

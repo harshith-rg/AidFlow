@@ -112,7 +112,7 @@ export interface Ambulance extends Partial<LatLng> {
 
 export interface AlertItem {
   id: string
-  type: 'dispatch' | 'hospital' | 'system' | 'no_ambulance'
+  type: 'dispatch' | 'hospital' | 'system' | 'no_ambulance' | 'emergency_reported'
   message: string
   caseId?: string
   createdAt: string

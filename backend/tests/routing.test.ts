@@ -9,7 +9,12 @@ import { OrsProvider } from '../src/modules/routing/providers/ors'
 import { runDijkstra } from '../src/modules/routing/algorithms/dijkstra'
 import { runAStar } from '../src/modules/routing/algorithms/astar'
 import { DEMO_GRAPH_NODES, DEMO_GRAPH_EDGES } from '../src/modules/routing/data/graphData'
-import { recommendHospital, type HospitalCandidate } from '../src/modules/routing/recommend'
+import {
+  recommendHospital,
+  mapWithBoundedConcurrency,
+  ROUTING_CONCURRENCY_LIMIT,
+  type HospitalCandidate,
+} from '../src/modules/routing/recommend'
 
 describe('Phase 4: Routing, ETA, and Hospital Recommendation', () => {
   let adminToken: string
@@ -226,6 +231,30 @@ describe('Phase 4: Routing, ETA, and Hospital Recommendation', () => {
           candidates,
         })
       ).rejects.toThrow()
+    })
+
+    it('Executes candidate routing with bounded concurrency while preserving order', async () => {
+      let activeRequests = 0
+      let maxSeenConcurrency = 0
+      const items = Array.from({ length: 15 }, (_, i) => i)
+
+      const results = await mapWithBoundedConcurrency(items, 4, async (val) => {
+        activeRequests++
+        if (activeRequests > maxSeenConcurrency) {
+          maxSeenConcurrency = activeRequests
+        }
+        await new Promise((resolve) => setTimeout(resolve, 10))
+        activeRequests--
+        return val * 2
+      })
+
+      expect(maxSeenConcurrency).toBeLessThanOrEqual(4)
+      expect(results).toEqual(items.map((x) => x * 2))
+    })
+
+    it('mapWithBoundedConcurrency handles empty list', async () => {
+      const res = await mapWithBoundedConcurrency([], 4, async (x) => x)
+      expect(res).toEqual([])
     })
   })
 
