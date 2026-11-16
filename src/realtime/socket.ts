@@ -1,5 +1,5 @@
 import { io, Socket } from 'socket.io-client'
-import type { EventPayloads } from '../../backend/src/realtime/events'
+import type { EventPayloads } from '../types/contract'
 
 const SERVER_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:4000'
 
